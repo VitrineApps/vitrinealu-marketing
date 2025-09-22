@@ -1,0 +1,16 @@
+pydantic>=2
+google-api-python-client
+google-auth
+watchdog
+Pillow
+opencv-python
+imagehash
+torch
+transformers
+rembg
+realesrgan
+gfpgan
+numpy
+tqdm
+loguru
+pytest

@@ -1,0 +1,7 @@
+# Placeholder for img_ultrawide.jpg
+# This should be replaced with an actual JPEG image that has EXIF metadata
+# indicating an ultra-wide-angle lens (focal length < 20mm)
+# The EXIF should include:
+# - FocalLengthIn35mmFilm: ~16mm (ultra-wide lens)
+# - DateTimeOriginal: golden hour timestamp (6-8 AM or 6-8 PM)
+# - Make/Model: Camera metadata

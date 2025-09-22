@@ -1,0 +1,7 @@
+# Placeholder for img_wide.jpg
+# This should be replaced with an actual JPEG image that has EXIF metadata
+# indicating a wide-angle lens (focal length around 24-35mm)
+# The EXIF should include:
+# - FocalLengthIn35mmFilm: ~28mm (wide lens)
+# - DateTimeOriginal: daytime timestamp
+# - Make/Model: Camera metadata

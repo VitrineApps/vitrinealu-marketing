@@ -1,0 +1,76 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Prompt Templates Facebook template should build Facebook prompt 1`] = `
+"Create a friendly Facebook caption about: Beautiful mountain landscape
+
+Key benefits: benefits of nature, benefits of adventure in the Scottish Highlands region
+
+Features:
+- stunning views
+- peaceful atmosphere
+
+
+Use vocabulary that is inspiring, authentic.
+
+Style: Friendly tone, 60-120 words, 3-5 hashtags."
+`;
+
+exports[`Prompt Templates Instagram/TikTok template should build Instagram prompt 1`] = `
+"Create a lifestyle-focused caption for instagram about: Beautiful mountain landscape
+
+Key benefits: benefits of nature, benefits of adventure in the Scottish Highlands region
+
+Features:
+- stunning views
+- peaceful atmosphere
+
+
+Use vocabulary that is inspiring, authentic.
+
+Style: Use emojis, keep 80-180 words, include 3-6 hashtags, end with CTA: "Tap link in bio for a free quote.""
+`;
+
+exports[`Prompt Templates Instagram/TikTok template should build TikTok prompt 1`] = `
+"Create a lifestyle-focused caption for tiktok about: Beautiful mountain landscape
+
+Key benefits: benefits of nature, benefits of adventure in the Scottish Highlands region
+
+Features:
+- stunning views
+- peaceful atmosphere
+
+
+Use vocabulary that is inspiring, authentic.
+
+Style: Use emojis, keep 80-180 words, include 3-6 hashtags, end with CTA: "Tap link in bio for a free quote.""
+`;
+
+exports[`Prompt Templates LinkedIn template should build LinkedIn prompt 1`] = `
+"Create a professional LinkedIn caption about: Beautiful mountain landscape
+
+Key benefits: benefits of nature, benefits of adventure in the Scottish Highlands region
+
+Features:
+- stunning views
+- peaceful atmosphere
+
+
+Use vocabulary that is inspiring, authentic.
+
+Style: Spec-driven, no emojis, 60-140 words, 2-4 hashtags, end with CTA: "Request a specification or site survey.""
+`;
+
+exports[`Prompt Templates YouTube Shorts template should build YouTube Shorts prompt 1`] = `
+"Create a YouTube Shorts caption with a concise hook first line about: Beautiful mountain landscape
+
+Key benefits: benefits of nature, benefits of adventure in the Scottish Highlands region
+
+Features:
+- stunning views
+- peaceful atmosphere
+
+
+Use vocabulary that is inspiring, authentic.
+
+Style: Start with hook, 1-3 hashtags, end with CTA: "Learn more via our site.""
+`;

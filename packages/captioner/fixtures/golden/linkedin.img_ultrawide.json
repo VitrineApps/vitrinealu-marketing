@@ -1,0 +1,17 @@
+{
+  "platform": "linkedin",
+  "caption": "[MOCK linkedin] Image: img_ultrawide — img ultrawide @ Northwest England",
+  "hashtags": [
+    "#vitrinealu"
+  ],
+  "call_to_action": "Request a free quote.",
+  "compliance_notes": "Caption meets LinkedIn guidelines for professional tone and length.",
+  "meta": {
+    "file": "fixtures/img_ultrawide.jpg",
+    "hash": "b2c3d4e5f6789012345678901234567890123456789012345678901234567890",
+    "exif": {
+      "lens": "standard",
+      "timeOfDay": "day"
+    }
+  }
+}

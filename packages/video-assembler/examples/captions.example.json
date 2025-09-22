@@ -1,0 +1,32 @@
+{
+  "platform": "instagram_reel",
+  "clips": [
+    {
+      "image": "sunset.jpg",
+      "durationSec": 3,
+      "pan": "left",
+      "zoom": "slow",
+      "caption": "Beautiful sunset over the mountains"
+    },
+    {
+      "image": "ocean.jpg",
+      "durationSec": 2,
+      "pan": "none",
+      "zoom": "none",
+      "caption": "Perfect for your next adventure"
+    },
+    {
+      "image": "city.jpg",
+      "durationSec": 4,
+      "pan": "right",
+      "zoom": "fast",
+      "caption": "Urban exploration awaits"
+    }
+  ],
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "format": "mp4"
+  }
+}

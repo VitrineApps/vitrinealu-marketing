@@ -33,3 +33,32 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Validate Brand Config
+        run: pnpm run validate-brand-config
+
+  python-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd services/media_ingest
+          conda env create -f environment.yml --force || conda env update -f environment.yml
+
+      - name: Validate Brand Config (Python)
+        run: |
+          conda run -n media-ingest python scripts/validate-brand-config.py
+
+      - name: Run Python tests
+        run: |
+          cd services/media_ingest
+          conda run -n media-ingest python -m pytest tests/ -v

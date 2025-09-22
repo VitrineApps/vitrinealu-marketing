@@ -1,0 +1,7 @@
+# VitrineAlu Brand Configuration Example
+# Copy this to config/brand.yaml and customize for your brand
+
+brand: "VitrineAlu"
+tone: ["premium", "elegant", "sophisticated", "innovative", "craftsmanship"]
+locale: "Northwest England"
+bannedHashtags: ["spam", "inappropriate", "nsfw", "political", "religious"]

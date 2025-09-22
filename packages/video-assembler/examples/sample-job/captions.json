@@ -1,0 +1,32 @@
+{
+  "platform": "instagram_reel",
+  "clips": [
+    {
+      "image": "image1.jpg",
+      "durationSec": 3,
+      "pan": "left",
+      "zoom": "slow",
+      "caption": "Welcome to our beautiful showroom"
+    },
+    {
+      "image": "image2.jpg",
+      "durationSec": 3,
+      "pan": "none",
+      "zoom": "none",
+      "caption": "Premium aluminum windows & doors"
+    },
+    {
+      "image": "image3.jpg",
+      "durationSec": 3,
+      "pan": "right",
+      "zoom": "fast",
+      "caption": "Energy efficient and durable"
+    }
+  ],
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "format": "mp4"
+  }
+}

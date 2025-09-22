@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  scheduler:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=sqlite:/app/data/scheduler.db
+      - BUFFER_ACCESS_TOKEN=${BUFFER_ACCESS_TOKEN}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - BRAND_NAME=${BRAND_NAME:-My Brand}
+      - BASE_URL=${BASE_URL:-http://localhost:3000}
+    volumes:
+      - scheduler_data:/app/data
+    depends_on:
+      - db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: sqlite3:latest
+    volumes:
+      - scheduler_data:/data
+    command: ["sqlite3", "/data/scheduler.db", "VACUUM;"]
+    profiles:
+      - maintenance
+
+  # Optional: PostgreSQL database (uncomment to use instead of SQLite)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     - POSTGRES_DB=scheduler
+  #     - POSTGRES_USER=scheduler
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+
+volumes:
+  scheduler_data:
+  # postgres_data:

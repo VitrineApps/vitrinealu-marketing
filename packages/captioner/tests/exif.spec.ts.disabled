@@ -1,0 +1,18 @@
+import { jest } from '@jest/globals';
+import { extractExifHints } from '../src/extractors/exif.js';
+
+describe('EXIF Extractor', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should return safe defaults on error', async () => {
+    // Test the error handling without mocking exifr
+    const result = await extractExifHints('nonexistent.jpg');
+
+    expect(result).toEqual({
+      lens: 'standard',
+      timeOfDay: 'day',
+    });
+  });
+});

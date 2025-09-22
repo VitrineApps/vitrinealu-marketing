@@ -1,0 +1,31 @@
+brand: vitrinealu
+tagline: "Bring light into living"
+colors:
+  primary: "#111827"
+  secondary: "#FBBF24"
+  accent: "#0EA5E9"
+  text_light: "#FFFFFF"
+  text_dark: "#111827"
+fonts:
+  primary: "Montserrat"
+  secondary: "Lato"
+watermark:
+  path: "assets/brand/watermark.png"
+  opacity: 0.85
+  margin_px: 48
+aspect_ratios:
+  reels: "9:16"
+  square: "1:1"
+  landscape: "16:9"
+safe_areas:
+  reels: { top: 220, bottom: 220, left: 40, right: 40 }
+tone:
+  - inspiring
+  - authentic
+  - premium
+  - elegant
+locale: en-GB
+bannedHashtags:
+  - "#ugly"
+  - "#cheap"
+  - "#lowquality"

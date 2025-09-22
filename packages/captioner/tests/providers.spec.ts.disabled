@@ -1,0 +1,178 @@
+import { jest } from '@jest/globals';
+
+// Mock OpenAI before importing
+jest.doMock('openai', () => ({
+  default: jest.fn().mockImplementation(() => ({
+    chat: {
+      completions: {
+        create: jest.fn(),
+      },
+    },
+  })),
+}));
+
+// Mock Gemini before importing
+jest.doMock('@google/generative-ai', () => ({
+  GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
+    getGenerativeModel: jest.fn().mockReturnValue({
+      generateContent: jest.fn(),
+    }),
+  })),
+}));
+
+import { OpenAIProvider } from '../src/providers/openaiProvider.js';
+import { GeminiProvider } from '../src/providers/geminiProvider.js';
+import { CaptionJSONSchema } from '../src/types.js';
+
+describe('Providers', () => {
+  const mockOptions = {
+    platform: 'instagram' as const,
+    brief: 'Test brief',
+    productTags: ['tag1', 'tag2'],
+    location: 'London',
+    features: ['feature1'],
+    brandTone: ['casual'],
+    exif: { lens: 'wide' as const, timeOfDay: 'day' as const },
+    seed: 42,
+    model: 'test-model',
+  };
+
+  describe('OpenAIProvider', () => {
+    let provider: OpenAIProvider;
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      provider = new OpenAIProvider('test-key');
+    });
+
+    it('should generate valid CaptionJSON', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              platform: 'instagram',
+              caption: 'Test caption',
+              hashtags: ['#test', '#caption'],
+              call_to_action: 'Shop now!',
+              compliance_notes: 'All good',
+            }),
+          },
+        }],
+      };
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const result = await provider.generate(mockOptions);
+
+      expect(CaptionJSONSchema.safeParse(result).success).toBe(true);
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          temperature: 0.2,
+          top_p: 0.9,
+          seed: 42,
+          response_format: { type: 'json_object' },
+        })
+      );
+    });
+
+    it('should retry on invalid JSON', async () => {
+      mockCreate
+        .mockResolvedValueOnce({
+          choices: [{ message: { content: 'invalid json' } }],
+        })
+        .mockResolvedValueOnce({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                platform: 'instagram',
+                caption: 'Test caption',
+                hashtags: ['#test'],
+                call_to_action: 'Buy now',
+              }),
+            },
+          }],
+        });
+
+      const result = await provider.generate(mockOptions);
+
+      expect(mockCreate).toHaveBeenCalledTimes(2);
+      expect(CaptionJSONSchema.safeParse(result).success).toBe(true);
+    });
+
+    it('should post-process hashtags', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              platform: 'instagram',
+              caption: 'Test',
+              hashtags: ['#Test', '#test', '#CAPTION'],
+              call_to_action: 'CTA',
+            }),
+          },
+        }],
+      };
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const result = await provider.generate(mockOptions);
+
+      expect(result.hashtags).toEqual(['#caption', '#test']);
+    });
+  });
+
+  describe('GeminiProvider', () => {
+    let provider: GeminiProvider;
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      provider = new GeminiProvider('test-key');
+    });
+
+    it('should generate valid CaptionJSON', async () => {
+      const mockResponse = {
+        response: {
+          text: () => JSON.stringify({
+            platform: 'instagram',
+            caption: 'Test caption',
+            hashtags: ['#test'],
+            call_to_action: 'Shop now!',
+          }),
+        },
+      };
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await provider.generate(mockOptions);
+
+      expect(CaptionJSONSchema.safeParse(result).success).toBe(true);
+    });
+
+    it('should pass seed to generation config', async () => {
+      const mockResponse = {
+        response: {
+          text: () => JSON.stringify({
+            platform: 'instagram',
+            caption: 'Test',
+            hashtags: ['#test'],
+            call_to_action: 'CTA',
+          }),
+        },
+      };
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      await provider.generate(mockOptions);
+
+      expect(mockGenerateContent).toHaveBeenCalledWith(
+        expect.stringContaining('Platform: instagram')
+      );
+      // Check generation config includes randomSeed
+      const instance = (GoogleGenerativeAI as any).mock.results[0].value;
+      expect(instance.getGenerativeModel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generationConfig: expect.objectContaining({
+            temperature: 0.2,
+            randomSeed: 42,
+          }),
+        })
+      );
+    });
+  });
+});

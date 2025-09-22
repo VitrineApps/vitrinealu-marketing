@@ -1,0 +1,18 @@
+{
+  "platform": "instagram",
+  "caption": "[MOCK instagram] Image: img_wide — img wide @ Northwest England",
+  "hashtags": [
+    "#vitrinealu"
+  ],
+  "call_to_action": "Request a free quote.",
+  "compliance_notes": "Caption meets Instagram guidelines for length and content.",
+  "meta": {
+    "file": "fixtures\\img_wide.jpg",
+    "hash": "5a1ae38c72f6ca05ce1cb95256ea4ee85b54d53b1867969bd53fa9abe7a0bad9",
+    "seed": 123,
+    "exif": {
+      "lens": "standard",
+      "timeOfDay": "day"
+    }
+  }
+}

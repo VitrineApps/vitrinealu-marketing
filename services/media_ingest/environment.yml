@@ -1,0 +1,28 @@
+name: media-ingest
+channels:
+  - conda-forge
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pydantic>=2
+  - pillow
+  - numpy
+  - tqdm
+  - loguru
+  - pytest
+  - flake8
+  - black
+  - isort
+  - pip:
+    - google-api-python-client
+    - google-auth
+    - watchdog
+    - opencv-python
+    - imagehash
+    - torch
+    - transformers
+    - rembg
+    - realesrgan
+    - gfpgan

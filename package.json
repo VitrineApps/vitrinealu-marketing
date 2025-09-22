@@ -19,7 +19,8 @@
     "changeset": "changeset",
     "release": "changeset version && pnpm install --no-frozen-lockfile",
     "up": "docker compose -f infra/compose/docker-compose.yml up -d",
-    "down": "docker compose -f infra/compose/docker-compose.yml down -v"
+    "down": "docker compose -f infra/compose/docker-compose.yml down -v",
+    "validate-brand-config": "tsx scripts/validate-brand-config.ts"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.9",
