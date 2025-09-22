@@ -1,0 +1,20 @@
+entryPoints:
+  web:
+    address: ':80'
+  websecure:
+    address: ':443'
+
+providers:
+  docker:
+    endpoint: 'unix:///var/run/docker.sock'
+    exposedByDefault: false
+
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/mkcert.pem
+      keyFile: /etc/traefik/certs/mkcert-key.pem
+
+log:
+  level: INFO
+
+accessLog: {}

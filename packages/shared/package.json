@@ -1,0 +1,30 @@
+{
+  "name": "@vitrinealu/shared",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./logger": "./dist/logger.js",
+    "./env": "./dist/env.js",
+    "./types": "./dist/types.js",
+    "./utils": "./dist/utils.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pino": "^9.2.0",
+    "tslib": "^2.6.3",
+    "zod": "^3.23.8"
+  }
+}

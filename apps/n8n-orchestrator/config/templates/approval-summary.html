@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Weekly Draft Approvals</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #0f172a; background: #f8fafc; padding: 24px; }
+    h1 { font-size: 20px; margin-bottom: 16px; }
+    table.summary { width: 100%; border-collapse: collapse; background: #ffffff; }
+    table.summary th, table.summary td { border: 1px solid #e2e8f0; padding: 12px; vertical-align: top; }
+    table.summary th { background: #e2e8f0; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    td.thumb { width: 120px; }
+    td.thumb img { max-width: 110px; border-radius: 8px; display: block; }
+    td.caption { max-width: 340px; }
+    a.approve { color: #047857; font-weight: 600; margin-right: 12px; text-decoration: none; }
+    a.reject { color: #b91c1c; font-weight: 600; text-decoration: none; }
+    .meta { color: #475569; font-size: 13px; margin-bottom: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Content awaiting approval ({{WEEK_LABEL}})</h1>
+  <p class="meta">Approve or request changes with one click. Links expire when the post is approved or rejected.</p>
+  <table class="summary">
+    <thead>
+      <tr>
+        <th>Preview</th>
+        <th>Slot / Channels</th>
+        <th>Caption</th>
+        <th>Scheduled</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{CONTENT_ROWS}}
+    </tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@vitrinealu/*": ["./packages/*/src", "./packages/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".turbo"]
+}

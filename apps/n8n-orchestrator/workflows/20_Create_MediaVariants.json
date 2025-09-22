@@ -1,0 +1,511 @@
+{
+  "meta": {
+    "instanceId": "template",
+    "generatedAt": "2025-09-21T00:00:00.000Z",
+    "n8nVersion": "1.67.1"
+  },
+  "workflows": [
+    {
+      "id": "c59baf6a-26dc-4c6c-8818-df3aaf26f742",
+      "name": "20_Create_MediaVariants",
+      "active": false,
+      "nodes": [
+        {
+          "id": "2b7a4f88-4db3-4c87-9067-996a8d5287a9",
+          "name": "Supabase Asset Trigger",
+          "type": "n8n-nodes-base.supabaseTrigger",
+          "typeVersion": 1,
+          "position": [
+            -1240,
+            300
+          ],
+          "parameters": {
+            "events": [
+              "INSERT"
+            ],
+            "schema": "public",
+            "table": "assets",
+            "payload": "record"
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Realtime)"
+            }
+          }
+        },
+        {
+          "id": "73e4b10b-0f86-4aa2-98ed-30fc2c9c939d",
+          "name": "Filter Selected",
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            -1000,
+            300
+          ],
+          "parameters": {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.record.status }}",
+                  "operation": "equal",
+                  "value2": "SELECTED"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "2ff93ae1-4a74-4ab1-9341-59f2a2f2a6c0",
+          "name": "Set Asset Context",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -760,
+            180
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "string": [
+                {
+                  "name": "assetId",
+                  "value": "={{ $json.record.id }}"
+                },
+                {
+                  "name": "sourceUrl",
+                  "value": "={{ $json.record.source_url }}"
+                },
+                {
+                  "name": "title",
+                  "value": "={{ $json.record.file_name }}"
+                }
+              ],
+              "json": [
+                {
+                  "name": "metadata",
+                  "value": "={{ $json.record }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "bb021792-b184-41b6-b0e3-b20f79fb0cab",
+          "name": "Enhance Asset",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            -520,
+            180
+          ],
+          "parameters": {
+            "method": "POST",
+            "url": "={{ ($env.WORKER_API_URL ?? \"https://api.localhost\") + \"/enhance\" }}",
+            "jsonParameters": true,
+            "options": {
+              "bodyContentType": "json",
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.WORKER_API_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 600
+            },
+            "body": "={{ { assetId: $json.assetId, sourceUrl: $json.sourceUrl } }}"
+          }
+        },
+        {
+          "id": "32d4544f-6a06-49cf-8dce-d9dcd678b408",
+          "name": "Privacy Blur",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            -280,
+            180
+          ],
+          "parameters": {
+            "method": "POST",
+            "url": "={{ ($env.WORKER_API_URL ?? \"https://api.localhost\") + \"/privacy/blur\" }}",
+            "jsonParameters": true,
+            "options": {
+              "bodyContentType": "json",
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.WORKER_API_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 600
+            },
+            "body": "={{ { assetId: $json.assetId, sourceUrl: $node[\"Enhance Asset\"].json.url ?? $json.sourceUrl } }}"
+          }
+        },
+        {
+          "id": "a77dc457-63c3-4606-b94d-3acd0ac2ed3e",
+          "name": "Background Cleanup",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            -40,
+            180
+          ],
+          "parameters": {
+            "method": "POST",
+            "url": "={{ ($env.WORKER_API_URL ?? \"https://api.localhost\") + \"/background/cleanup\" }}",
+            "jsonParameters": true,
+            "options": {
+              "bodyContentType": "json",
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.WORKER_API_TOKEN}}"
+                  }
+                ]
+              },
+              "queryParametersUi": {
+                "parameter": [
+                  {
+                    "name": "CLEANUP",
+                    "value": "true"
+                  }
+                ]
+              },
+              "timeout": 600
+            },
+            "body": "={{ { assetId: $json.assetId, sourceUrl: $node[\"Privacy Blur\"].json.url ?? $node[\"Enhance Asset\"].json.url ?? $json.sourceUrl } }}"
+          }
+        },
+        {
+          "id": "b61bd0e6-ced0-44c5-9ae7-aadcb5dc50ab",
+          "name": "Create Reel",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            200,
+            100
+          ],
+          "parameters": {
+            "method": "POST",
+            "url": "={{ ($env.WORKER_API_URL ?? \"https://api.localhost\") + \"/video/reel\" }}",
+            "jsonParameters": true,
+            "options": {
+              "bodyContentType": "json",
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.WORKER_API_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 900
+            },
+            "body": "={{ { assetId: $json.assetId, sourceUrl: $node[\"Background Cleanup\"].json.url ?? $node[\"Privacy Blur\"].json.url ?? $node[\"Enhance Asset\"].json.url ?? $json.sourceUrl, durationSeconds: 30, aspect: \"9:16\" } }}"
+          }
+        },
+        {
+          "id": "a0a22d72-6bab-46af-a266-d21f2f51e091",
+          "name": "Create LinkedIn Video",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            200,
+            260
+          ],
+          "parameters": {
+            "method": "POST",
+            "url": "={{ ($env.WORKER_API_URL ?? \"https://api.localhost\") + \"/video/linkedin\" }}",
+            "jsonParameters": true,
+            "options": {
+              "bodyContentType": "json",
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.WORKER_API_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 900
+            },
+            "body": "={{ { assetId: $json.assetId, sourceUrl: $node[\"Background Cleanup\"].json.url ?? $node[\"Privacy Blur\"].json.url ?? $node[\"Enhance Asset\"].json.url ?? $json.sourceUrl, durationRange: [30, 60], aspect: \"16:9\" } }}"
+          }
+        },
+        {
+          "id": "2b33b289-5640-4e1e-8619-4de61f65e6c6",
+          "name": "Build Variant Records",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            460,
+            180
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "string": [
+                {
+                  "name": "assetId",
+                  "value": "={{ $json.assetId }}"
+                }
+              ],
+              "json": [
+                {
+                  "name": "variants",
+                  "value": "={{ [\n  { type: 'enhanced', url: $node['Enhance Asset'].json.url, metadata: $node['Enhance Asset'].json.metadata ?? {} },\n  { type: 'safe', url: $node['Privacy Blur'].json.url, metadata: $node['Privacy Blur'].json.metadata ?? {} },\n  { type: 'cleaned', url: $node['Background Cleanup'].json.url, metadata: $node['Background Cleanup'].json.metadata ?? {} },\n  { type: 'reel', url: $node['Create Reel'].json.url, metadata: $node['Create Reel'].json.metadata ?? {} },\n  { type: 'linkedin', url: $node['Create LinkedIn Video'].json.url, metadata: $node['Create LinkedIn Video'].json.metadata ?? {} }\n] }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "a1307bef-1ec2-41ce-a7f6-521565bfbcb7",
+          "name": "Insert Variants",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            700,
+            180
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "insert",
+            "schema": "public",
+            "table": "variants",
+            "jsonParameters": true,
+            "data": "={{ $json.variants.map(v => ({ asset_id: $json.assetId, variant_type: v.type, url: v.url, metadata: v.metadata })) }}"
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "id": "7adfb653-8186-4a27-ae47-a081da7091d6",
+          "name": "Mark Asset Ready",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            940,
+            180
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "update",
+            "schema": "public",
+            "table": "assets",
+            "jsonParameters": true,
+            "data": "={{ { status: 'READY' } }}",
+            "queryParametersUi": {
+              "parameter": [
+                {
+                  "name": "id",
+                  "value": "={{ $json.assetId }}"
+                }
+              ]
+            }
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "id": "2e37d8c2-68ad-4196-b8d2-76a18de97b56",
+          "name": "Prepare Schedule Event",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            1180,
+            180
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "json": [
+                {
+                  "name": "assetId",
+                  "value": "={{ $json.assetId }}"
+                },
+                {
+                  "name": "variants",
+                  "value": "={{ $prevNode['Build Variant Records'].json.variants }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "d752c86f-eed2-4d4f-a96b-8c4c577d10a5",
+          "name": "Emit 30_Schedule_Drafts",
+          "type": "n8n-nodes-base.executeWorkflow",
+          "typeVersion": 1,
+          "position": [
+            1420,
+            180
+          ],
+          "parameters": {
+            "workflowName": "30_Schedule_Drafts",
+            "options": {
+              "additionalFields": {
+                "inputData": "={{ [{ json: { assetId: $json.assetId, variants: $json.variants } }] }}"
+              }
+            }
+          }
+        }
+      ],
+      "connections": {
+        "Supabase Asset Trigger": {
+          "main": [
+            [
+              {
+                "node": "Filter Selected",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Filter Selected": {
+          "main": [
+            [
+              {
+                "node": "Set Asset Context",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Set Asset Context": {
+          "main": [
+            [
+              {
+                "node": "Enhance Asset",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Enhance Asset": {
+          "main": [
+            [
+              {
+                "node": "Privacy Blur",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Privacy Blur": {
+          "main": [
+            [
+              {
+                "node": "Background Cleanup",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Background Cleanup": {
+          "main": [
+            [
+              {
+                "node": "Create Reel",
+                "type": "main",
+                "index": 0
+              },
+              {
+                "node": "Create LinkedIn Video",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Create Reel": {
+          "main": [
+            [
+              {
+                "node": "Build Variant Records",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Create LinkedIn Video": {
+          "main": [
+            [
+              {
+                "node": "Build Variant Records",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Build Variant Records": {
+          "main": [
+            [
+              {
+                "node": "Insert Variants",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Insert Variants": {
+          "main": [
+            [
+              {
+                "node": "Mark Asset Ready",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Mark Asset Ready": {
+          "main": [
+            [
+              {
+                "node": "Prepare Schedule Event",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Prepare Schedule Event": {
+          "main": [
+            [
+              {
+                "node": "Emit 30_Schedule_Drafts",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        {
+          "name": "create"
+        }
+      ]
+    }
+  ]
+}

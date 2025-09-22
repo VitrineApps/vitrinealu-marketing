@@ -1,0 +1,19 @@
+{
+  "name": "@vitrinealu/n8n-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "pnpm build --watch",
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@vitrinealu/shared": "workspace:*",
+    "n8n-workflow": "^1.67.1"
+  }
+}

@@ -1,0 +1,634 @@
+{
+  "meta": {
+    "instanceId": "template",
+    "generatedAt": "2025-09-21T00:00:00.000Z",
+    "n8nVersion": "1.67.1"
+  },
+  "workflows": [
+    {
+      "id": "7e91b64c-44d1-4a86-a422-3f692ba4f974",
+      "name": "40_Approve_OneClick",
+      "active": false,
+      "nodes": [
+        {
+          "id": "52d95f6c-53d3-41e6-9a1f-7bb06d1b2bac",
+          "name": "Approval Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "typeVersion": 1,
+          "position": [
+            -1280,
+            340
+          ],
+          "parameters": {
+            "httpMethod": "GET",
+            "path": "approve",
+            "responseMode": "responseNode",
+            "responseData": "firstEntryJson",
+            "options": {
+              "responseContentType": "application/json"
+            }
+          }
+        },
+        {
+          "id": "7e28fe48-7c0f-4cc9-832f-5cc6fbf93fcb",
+          "name": "Validate Token",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            -1020,
+            340
+          ],
+          "parameters": {
+            "functionCode": "const crypto = require('crypto');\nconst query = $json.query ?? {};\nconst postId = query.id ?? query.postId;\nconst decision = (query.decision || 'approve').toLowerCase();\nconst providedToken = query.token;\nconst secret = $env.APPROVAL_HMAC_SECRET;\nif (!secret) {\n  throw new Error('APPROVAL_HMAC_SECRET is not defined');\n}\nif (!postId || !providedToken) {\n  return [{ json: { isValid: false, reason: 'Missing id or token', postId, decision, providedToken } }];\n}\nconst payload = `${postId}:${decision}`;\nconst expectedToken = crypto.createHmac('sha256', secret).update(payload).digest('hex');\nlet isValid = false;\nif (providedToken.length === expectedToken.length) {\n  try {\n    isValid = crypto.timingSafeEqual(Buffer.from(providedToken), Buffer.from(expectedToken));\n  } catch (err) {\n    isValid = false;\n  }\n}\nreturn [{ json: { postId, decision, providedToken, expectedToken, isValid, reason: isValid ? null : 'Invalid token' } }];"
+          }
+        },
+        {
+          "id": "d5cfdb52-6553-4af2-acb8-540f4ad5a9ae",
+          "name": "Token OK?",
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            -780,
+            340
+          ],
+          "parameters": {
+            "conditions": {
+              "boolean": [
+                {
+                  "value1": "={{ $json.isValid }}",
+                  "value2": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "4f1dc7df-e6c0-4ef7-aa22-6b82448f9698",
+          "name": "Invalid Response",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -580,
+            180
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "number": [
+                {
+                  "name": "statusCode",
+                  "value": 403
+                }
+              ],
+              "string": [
+                {
+                  "name": "message",
+                  "value": "Invalid or expired approval link."
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "33ec85c8-191e-4ad9-aac6-b7365567658f",
+          "name": "Respond Invalid",
+          "type": "n8n-nodes-base.webhookResponse",
+          "typeVersion": 1,
+          "position": [
+            -360,
+            180
+          ],
+          "parameters": {
+            "statusCode": "={{ $json.statusCode }}",
+            "responseBody": "={{ { success: false, message: $json.message } }}"
+          }
+        },
+        {
+          "id": "0a639ad1-2cff-43b5-8b00-0c71658dda5e",
+          "name": "Load Post",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            -560,
+            420
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "getOne",
+            "schema": "public",
+            "table": "posts",
+            "filter": "id",
+            "value": "={{ $node['Validate Token'].json['postId'] }}",
+            "queryParametersUi": {
+              "parameter": [
+                {
+                  "name": "select",
+                  "value": "id,asset_id,buffer_update_id,scheduled_at,caption,owner_email,platforms,variant_url"
+                }
+              ]
+            }
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "id": "f8f074e4-3a7b-4b36-80f0-56771f73f4ac",
+          "name": "Post Found?",
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            -320,
+            420
+          ],
+          "parameters": {
+            "conditions": {
+              "boolean": [
+                {
+                  "value1": "={{ !!$json.id }}",
+                  "value2": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "92a94862-42ca-402a-8fab-6ff0c2056aa0",
+          "name": "Not Found Response",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -140,
+            220
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "number": [
+                {
+                  "name": "statusCode",
+                  "value": 404
+                }
+              ],
+              "string": [
+                {
+                  "name": "message",
+                  "value": "Post not found or already processed."
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "0fe9b056-13df-41ab-9b9d-4e467f4897c1",
+          "name": "Respond Not Found",
+          "type": "n8n-nodes-base.webhookResponse",
+          "typeVersion": 1,
+          "position": [
+            80,
+            220
+          ],
+          "parameters": {
+            "statusCode": "={{ $json.statusCode }}",
+            "responseBody": "={{ { success: false, message: $json.message } }}"
+          }
+        },
+        {
+          "id": "8f4cef8a-a492-4409-9d28-7ff5b8c2b64c",
+          "name": "Set Post Context",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -120,
+            520
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "string": [
+                {
+                  "name": "postId",
+                  "value": "={{ $json.id }}"
+                },
+                {
+                  "name": "decision",
+                  "value": "={{ $node['Validate Token'].json['decision'] }}"
+                },
+                {
+                  "name": "bufferUpdateId",
+                  "value": "={{ $json.buffer_update_id ?? '' }}"
+                },
+                {
+                  "name": "scheduledAt",
+                  "value": "={{ $json.scheduled_at }}"
+                },
+                {
+                  "name": "ownerEmail",
+                  "value": "={{ $json.owner_email ?? $env.ADMIN_EMAIL }}"
+                },
+                {
+                  "name": "caption",
+                  "value": "={{ $json.caption ?? '' }}"
+                },
+                {
+                  "name": "variantUrl",
+                  "value": "={{ $json.variant_url ?? '' }}"
+                }
+              ],
+              "json": [
+                {
+                  "name": "platforms",
+                  "value": "={{ $json.platforms ?? [] }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "0a62e592-5d8c-44c9-ab1c-052f3a549c38",
+          "name": "Approve?",
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            140,
+            520
+          ],
+          "parameters": {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.decision }}",
+                  "operation": "equal",
+                  "value2": "approve"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "85e5dc3c-9d6a-456c-94a8-859930f5bfb1",
+          "name": "Schedule Buffer Update",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            360,
+            420
+          ],
+          "parameters": {
+            "method": "POST",
+            "url": "https://api.bufferapp.com/1/updates/update.json",
+            "jsonParameters": true,
+            "options": {
+              "queryParametersUi": {
+                "parameter": [
+                  {
+                    "name": "update_id",
+                    "value": "={{ $json.bufferUpdateId }}"
+                  }
+                ]
+              },
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.BUFFER_ACCESS_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 300
+            },
+            "body": "={{ { now: false, draft: false, scheduled_at: $json.scheduledAt } }}"
+          }
+        },
+        {
+          "id": "04782a7e-1906-4bf4-9835-0fb4f6c5a6a7",
+          "name": "Mark Approved",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            580,
+            420
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "update",
+            "schema": "public",
+            "table": "posts",
+            "jsonParameters": true,
+            "data": "={{ { status: 'APPROVED', approved_at: new Date().toISOString() } }}",
+            "queryParametersUi": {
+              "parameter": [
+                {
+                  "name": "id",
+                  "value": "={{ $json.postId }}"
+                }
+              ]
+            }
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "id": "69c6a0de-1b19-42b9-b929-9b020832dfff",
+          "name": "Approved Response",
+          "type": "n8n-nodes-base.webhookResponse",
+          "typeVersion": 1,
+          "position": [
+            820,
+            420
+          ],
+          "parameters": {
+            "statusCode": 200,
+            "responseBody": "={{ { success: true, message: 'Post approved and scheduled.' } }}"
+          }
+        },
+        {
+          "id": "3fadc6d3-8540-4f70-813b-dda001f0cec8",
+          "name": "Mark Rejected",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            360,
+            640
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "update",
+            "schema": "public",
+            "table": "posts",
+            "jsonParameters": true,
+            "data": "={{ { status: 'REJECTED', rejected_at: new Date().toISOString() } }}",
+            "queryParametersUi": {
+              "parameter": [
+                {
+                  "name": "id",
+                  "value": "={{ $json.postId }}"
+                }
+              ]
+            }
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "id": "28bd9a4e-4726-4f7e-a7c5-7caf411dfceb",
+          "name": "Prepare Reject Email",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            580,
+            640
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "string": [
+                {
+                  "name": "toEmail",
+                  "value": "={{ $json.ownerEmail ?? $env.ADMIN_EMAIL }}"
+                },
+                {
+                  "name": "subject",
+                  "value": "Your draft requires edits"
+                },
+                {
+                  "name": "editLink",
+                  "value": "={{ ($env.APPROVAL_EDIT_BASE_URL ?? 'https://approve.localhost/edit') + '?id=' + encodeURIComponent($json.postId) }}"
+                },
+                {
+                  "name": "bodyText",
+                  "value": "={{ `Hi,\n\nWe reviewed the draft for slot ${$json.postId} and need some updates. Please edit here: ${$json.editLink}.\n\nThanks!` }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "4d0aeb81-3171-4e8e-aa07-7d99c6e81735",
+          "name": "Send Reject Email",
+          "type": "n8n-nodes-base.emailSend",
+          "typeVersion": 2,
+          "position": [
+            800,
+            640
+          ],
+          "parameters": {
+            "fromEmail": "={{ $env.SMTP_FROM ?? 'noreply@local.test' }}",
+            "toEmail": "={{ $json.toEmail }}",
+            "subject": "={{ $json.subject }}",
+            "text": "={{ $json.bodyText }}"
+          },
+          "credentials": {
+            "smtp": {
+              "name": "SMTP (Operations)"
+            }
+          }
+        },
+        {
+          "id": "4072d385-c0c4-4f12-81bc-0c3b6c953828",
+          "name": "Rejected Response",
+          "type": "n8n-nodes-base.webhookResponse",
+          "typeVersion": 1,
+          "position": [
+            1020,
+            640
+          ],
+          "parameters": {
+            "statusCode": 200,
+            "responseBody": "={{ { success: true, message: 'Post marked as rejected.' } }}"
+          }
+        }
+      ],
+      "connections": {
+        "Approval Webhook": {
+          "main": [
+            [
+              {
+                "node": "Validate Token",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Validate Token": {
+          "main": [
+            [
+              {
+                "node": "Token OK?",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Token OK?": {
+          "main": [
+            [
+              {
+                "node": "Invalid Response",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Load Post",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Invalid Response": {
+          "main": [
+            [
+              {
+                "node": "Respond Invalid",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Load Post": {
+          "main": [
+            [
+              {
+                "node": "Post Found?",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Post Found?": {
+          "main": [
+            [
+              {
+                "node": "Not Found Response",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Set Post Context",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Not Found Response": {
+          "main": [
+            [
+              {
+                "node": "Respond Not Found",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Set Post Context": {
+          "main": [
+            [
+              {
+                "node": "Approve?",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Approve?": {
+          "main": [
+            [
+              {
+                "node": "Schedule Buffer Update",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Mark Rejected",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Schedule Buffer Update": {
+          "main": [
+            [
+              {
+                "node": "Mark Approved",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Mark Approved": {
+          "main": [
+            [
+              {
+                "node": "Approved Response",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Mark Rejected": {
+          "main": [
+            [
+              {
+                "node": "Prepare Reject Email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Prepare Reject Email": {
+          "main": [
+            [
+              {
+                "node": "Send Reject Email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Send Reject Email": {
+          "main": [
+            [
+              {
+                "node": "Rejected Response",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        {
+          "name": "approval"
+        }
+      ]
+    }
+  ]
+}

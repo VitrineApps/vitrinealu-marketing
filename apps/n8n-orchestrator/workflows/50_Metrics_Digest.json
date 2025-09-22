@@ -1,0 +1,669 @@
+{
+  "meta": {
+    "instanceId": "template",
+    "generatedAt": "2025-09-21T00:00:00.000Z",
+    "n8nVersion": "1.67.1"
+  },
+  "workflows": [
+    {
+      "id": "f2a6b2d7-6c4f-4c96-bb63-60f3fd1a3730",
+      "name": "50_Metrics_Digest",
+      "active": false,
+      "nodes": [
+        {
+          "id": "0fcb9c65-0ba5-4e9b-88a2-8c2cbce0dff3",
+          "name": "Metrics Digest Cron",
+          "type": "n8n-nodes-base.cron",
+          "typeVersion": 1,
+          "position": [
+            -1320,
+            300
+          ],
+          "parameters": {
+            "mode": "custom",
+            "custom": {
+              "cronExpression": "0 17 * * 0"
+            }
+          }
+        },
+        {
+          "id": "1d2d012d-2d4a-4b01-9b24-01b3240befd4",
+          "name": "Compute Metrics Window",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            -1090,
+            300
+          ],
+          "parameters": {
+            "functionCode": "const now = new Date();\nconst end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));\nconst start = new Date(end);\nstart.setUTCDate(start.getUTCDate() - 6);\nstart.setUTCHours(0, 0, 0, 0);\nconst tz = $env.TIMEZONE ?? 'Europe/London';\nconst fmt = new Intl.DateTimeFormat('en-GB', { month: 'short', day: 'numeric', timeZone: tz });\nconst weekLabel = `${fmt.format(start)} – ${fmt.format(end)}`;\nreturn [{ json: { windowStartISO: start.toISOString(), windowEndISO: end.toISOString(), weekLabel } }];"
+          }
+        },
+        {
+          "id": "b7b99da7-a759-4edd-9d41-516699d7b734",
+          "name": "Add Window Context",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -870,
+            300
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "string": [
+                {
+                  "name": "windowStartISO",
+                  "value": "={{ $json.windowStartISO }}"
+                },
+                {
+                  "name": "windowEndISO",
+                  "value": "={{ $json.windowEndISO }}"
+                },
+                {
+                  "name": "weekLabel",
+                  "value": "={{ $json.weekLabel }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "f92b2213-3d32-4ef1-aec8-e5d3903354f5",
+          "name": "Fetch Buffer Metrics",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            -640,
+            300
+          ],
+          "parameters": {
+            "method": "GET",
+            "url": "https://api.bufferapp.com/1/analytics/updates.json",
+            "jsonParameters": true,
+            "options": {
+              "queryParametersUi": {
+                "parameter": [
+                  {
+                    "name": "since",
+                    "value": "={{ $node['Add Window Context'].json['windowStartISO'] }}"
+                  },
+                  {
+                    "name": "until",
+                    "value": "={{ $node['Add Window Context'].json['windowEndISO'] }}"
+                  }
+                ]
+              },
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.BUFFER_ACCESS_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 300
+            }
+          }
+        },
+        {
+          "id": "8ca8a347-1f41-44d7-94c3-3dfc2787b30f",
+          "name": "Attach Window Metadata",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -420,
+            300
+          ],
+          "parameters": {
+            "values": {
+              "string": [
+                {
+                  "name": "windowStartISO",
+                  "value": "={{ $node['Add Window Context'].json['windowStartISO'] }}"
+                },
+                {
+                  "name": "windowEndISO",
+                  "value": "={{ $node['Add Window Context'].json['windowEndISO'] }}"
+                },
+                {
+                  "name": "weekLabel",
+                  "value": "={{ $node['Add Window Context'].json['weekLabel'] }}"
+                }
+              ]
+            },
+            "options": {
+              "keepOnlySet": false
+            }
+          }
+        },
+        {
+          "id": "6dd8c0ac-910d-4fe0-b2ec-0fec1186a98d",
+          "name": "Process Buffer Metrics",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            -160,
+            300
+          ],
+          "parameters": {
+            "functionCode": "const item = items[0]?.json ?? {};\nconst updates = item.updates ?? item.data ?? [];\nconst windowStart = item.windowStartISO;\nconst windowEnd = item.windowEndISO;\nconst weekLabel = item.weekLabel ?? '';\nconst results = [];\nfor (const update of updates) {\n  const metrics = update.metrics ?? update.statistics ?? {};\n  const utm = update.utm ?? metrics.utm ?? {};\n  const profile = update.profile ?? {};\n  const postId = update.id ?? update.update_id ?? update._id;\n  if (!postId) {\n    continue;\n  }\n  const sentAt = update.sent_at ?? update.scheduled_at ?? update.day ?? null;\n  const views = Number(metrics.impressions ?? metrics.views ?? 0);\n  const clicks = Number(metrics.clicks ?? 0);\n  const shares = Number(metrics.shares ?? metrics.reshares ?? 0);\n  const comments = Number(metrics.comments ?? 0);\n  const saves = Number(metrics.saves ?? metrics.favorites ?? 0);\n  const likes = Number(metrics.likes ?? 0);\n  const profileVisits = Number(metrics.profile_visits ?? metrics.profileVisits ?? 0);\n  const leads = Number(utm.social ?? metrics.leads ?? 0);\n  const ctr = views > 0 ? Number((metrics.ctr ?? (clicks / views))) : 0;\n  results.push({ json: {\n    postId,\n    profileId: update.profile_id ?? profile.id ?? update.channel_id ?? 'unknown',\n    profileName: profile.name ?? update.profile_name ?? 'Channel',\n    sentAt,\n    views,\n    clicks,\n    shares,\n    comments,\n    saves,\n    likes,\n    profileVisits,\n    ctr,\n    leads,\n    windowStart,\n    windowEnd,\n    weekLabel\n  }});\n}\nif (results.length === 0) {\n  return [{ json: { empty: true, weekLabel, windowStart, windowEnd } }];\n}\nreturn results;"
+          }
+        },
+        {
+          "id": "4f1b8ae6-0f6d-4f1e-bf3b-6fd22b5470ff",
+          "name": "Has Metrics?",
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            80,
+            220
+          ],
+          "parameters": {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.postId }}",
+                  "operation": "isEmpty"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "3a8f5c9a-5b50-47b2-b70b-2111992f31ba",
+          "name": "Upsert Metrics",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            320,
+            120
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "insert",
+            "schema": "public",
+            "table": "metrics",
+            "jsonParameters": true,
+            "data": "={{ { post_id: $json.postId, profile_id: $json.profileId, profile_name: $json.profileName, window_start: $json.windowStart, window_end: $json.windowEnd, collected_at: new Date().toISOString(), views: $json.views, clicks: $json.clicks, shares: $json.shares, comments: $json.comments, saves: $json.saves, likes: $json.likes, profile_visits: $json.profileVisits, ctr: $json.ctr, leads: $json.leads } }}",
+            "queryParametersUi": {
+              "parameter": [
+                {
+                  "name": "on_conflict",
+                  "value": "post_id"
+                }
+              ]
+            },
+            "additionalFields": {
+              "additionalHeaders": [
+                {
+                  "name": "Prefer",
+                  "value": "resolution=merge-duplicates"
+                }
+              ]
+            }
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "id": "494fba78-5c2e-4d1f-afcd-16e9c28ab6f9",
+          "name": "Compute KPIs",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            320,
+            360
+          ],
+          "parameters": {
+            "functionCode": "const rows = items.map(item => item.json);\nconst weekLabel = rows[0]?.weekLabel ?? '';\nconst metricsRows = rows.filter(row => row.postId);\nif (metricsRows.length === 0) {\n  return [{ json: { hasData: false, weekLabel } }];\n}\nconst channelMap = new Map();\nconst tsMap = new Map();\nlet overall = { views: 0, clicks: 0, shares: 0, comments: 0, saves: 0, likes: 0, profileVisits: 0, leads: 0, posts: 0 };\nfor (const row of metricsRows) {\n  const channelId = row.profileId || 'unknown';\n  if (!channelMap.has(channelId)) {\n    channelMap.set(channelId, { channelId, channelName: row.profileName || channelId, views: 0, clicks: 0, shares: 0, comments: 0, saves: 0, likes: 0, profileVisits: 0, leads: 0, posts: 0 });\n  }\n  const channel = channelMap.get(channelId);\n  channel.views += row.views;\n  channel.clicks += row.clicks;\n  channel.shares += row.shares;\n  channel.comments += row.comments;\n  channel.saves += row.saves;\n  channel.likes += row.likes;\n  channel.profileVisits += row.profileVisits;\n  channel.leads += row.leads;\n  channel.posts += 1;\n  overall.views += row.views;\n  overall.clicks += row.clicks;\n  overall.shares += row.shares;\n  overall.comments += row.comments;\n  overall.saves += row.saves;\n  overall.likes += row.likes;\n  overall.profileVisits += row.profileVisits;\n  overall.leads += row.leads;\n  overall.posts += 1;\n  const dateKey = (row.sentAt ? row.sentAt.slice(0, 10) : row.windowStart.slice(0, 10));\n  if (!tsMap.has(dateKey)) {\n    tsMap.set(dateKey, { views: 0, clicks: 0, leads: 0 });\n  }\n  const ts = tsMap.get(dateKey);\n  ts.views += row.views;\n  ts.clicks += row.clicks;\n  ts.leads += row.leads;\n}\nconst perChannel = Array.from(channelMap.values()).map(channel => {\n  const engagementActions = channel.likes + channel.comments + channel.shares + channel.saves;\n  const engagementRate = channel.views > 0 ? engagementActions / channel.views : 0;\n  const ctr = channel.views > 0 ? channel.clicks / channel.views : 0;\n  const savesShares = channel.saves + channel.shares;\n  return {\n    channelId: channel.channelId,\n    channelName: channel.channelName,\n    views: channel.views,\n    clicks: channel.clicks,\n    shares: channel.shares,\n    comments: channel.comments,\n    saves: channel.saves,\n    likes: channel.likes,\n    profileVisits: channel.profileVisits,\n    leads: channel.leads,\n    posts: channel.posts,\n    engagementRate,\n    ctr,\n    savesShares\n  };\n});\nconst overallEngagementActions = overall.likes + overall.comments + overall.shares + overall.saves;\nconst overallEngagementRate = overall.views > 0 ? overallEngagementActions / overall.views : 0;\nconst overallCtr = overall.views > 0 ? overall.clicks / overall.views : 0;\nconst timeseriesLabels = Array.from(tsMap.keys()).sort();\nconst timeseriesViews = timeseriesLabels.map(label => tsMap.get(label).views);\nconst timeseriesCtr = timeseriesLabels.map(label => { const entry = tsMap.get(label); return entry.views > 0 ? (entry.clicks / entry.views) * 100 : 0; });\nconst timeseriesLeads = timeseriesLabels.map(label => tsMap.get(label).leads);\nreturn [{ json: {\n  hasData: true,\n  weekLabel,\n  perChannel,\n  overall: { views: overall.views, clicks: overall.clicks, shares: overall.shares, comments: overall.comments, saves: overall.saves, likes: overall.likes, profileVisits: overall.profileVisits, leads: overall.leads, posts: overall.posts, engagementRate: overallEngagementRate, ctr: overallCtr },\n  timeseries: { labels: timeseriesLabels, views: timeseriesViews, ctr: timeseriesCtr, leads: timeseriesLeads }\n} }];"
+          }
+        },
+        {
+          "id": "fb52b4cf-c773-4f2e-b3a9-3ef3c10de0fa",
+          "name": "Build Chart Payloads",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            540,
+            360
+          ],
+          "parameters": {
+            "functionCode": "const aggregator = items[0]?.json ?? {};\nif (!aggregator.hasData) {\n  return [{ json: { aggregator, charts: [] } }];\n}\nconst labels = aggregator.timeseries.labels;\nconst viewsData = aggregator.timeseries.views;\nconst ctrData = aggregator.timeseries.ctr;\nconst charts = [\n  {\n    name: 'views_sparkline',\n    config: {\n      type: 'line',\n      data: { labels, datasets: [{ label: 'Views', data: viewsData, borderColor: '#2563eb', borderWidth: 2, fill: false, tension: 0.35, pointRadius: 0 }] },\n      options: { plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, layout: { padding: 10 } }\n    }\n  },\n  {\n    name: 'ctr_sparkline',\n    config: {\n      type: 'line',\n      data: { labels, datasets: [{ label: 'CTR %', data: ctrData.map(v => Number(v.toFixed(2))), borderColor: '#f97316', borderWidth: 2, fill: false, tension: 0.35, pointRadius: 0 }] },\n      options: { plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, layout: { padding: 10 } }\n    }\n  }\n];\nreturn [{ json: { aggregator, charts } }];"
+          }
+        },
+        {
+          "id": "737b70a3-4b59-4544-9c16-0cde8b6b5b86",
+          "name": "Split Chart Requests",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            760,
+            360
+          ],
+          "parameters": {
+            "functionCode": "const aggregator = items[0]?.json?.aggregator ?? {};\nconst charts = items[0]?.json?.charts ?? [];\nif (!charts.length) {\n  return [{ json: { aggregator, chartName: null, chartConfig: null } }];\n}\nreturn charts.map(chart => ({ json: { aggregator, chartName: chart.name, chartConfig: chart.config } }));"
+          }
+        },
+        {
+          "id": "6bbb6565-d79c-4b60-a53a-77090c4374fc",
+          "name": "Chart Config?",
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            980,
+            360
+          ],
+          "parameters": {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.chartConfig }}",
+                  "operation": "isEmpty"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "af2382b0-b9f1-4d44-98b7-c3576b5c7f74",
+          "name": "No Chart Placeholder",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            1200,
+            200
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "json": [
+                {
+                  "name": "aggregator",
+                  "value": "={{ $json.aggregator }}"
+                }
+              ],
+              "string": [
+                {
+                  "name": "chartName",
+                  "value": ""
+                },
+                {
+                  "name": "chartUrl",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "049380c0-7adf-4936-b9be-50cd84515357",
+          "name": "Create Sparkline",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            1200,
+            460
+          ],
+          "parameters": {
+            "method": "POST",
+            "url": "https://quickchart.io/chart/create",
+            "jsonParameters": true,
+            "body": "={{ { chart: $json.chartConfig, format: 'png', width: 800, height: 260, backgroundColor: '#ffffff' } }}",
+            "options": {
+              "timeout": 300
+            }
+          }
+        },
+        {
+          "id": "9ae59fc1-2b4f-4b1b-bb5c-6c66f9c380a3",
+          "name": "Set Chart Result",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            1420,
+            460
+          ],
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "string": [
+                {
+                  "name": "chartName",
+                  "value": "={{ $item(0).$node['Split Chart Requests'].json['chartName'] }}"
+                },
+                {
+                  "name": "chartUrl",
+                  "value": "={{ $json.url ?? $json.result?.url ?? '' }}"
+                }
+              ],
+              "json": [
+                {
+                  "name": "aggregator",
+                  "value": "={{ $item(0).$node['Split Chart Requests'].json['aggregator'] }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "4a766fd9-4e07-465d-a2c0-0ff54c20d0b8",
+          "name": "Collect Charts",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            1640,
+            340
+          ],
+          "parameters": {
+            "functionCode": "const chartMap = {};\nlet aggregator = null;\nfor (const item of items) {\n  const data = item.json || {};\n  if (!aggregator && data.aggregator) {\n    aggregator = data.aggregator;\n  }\n  if (data.chartName && data.chartUrl) {\n    chartMap[data.chartName] = data.chartUrl;\n  }
+}
+if (!aggregator && items[0]) {
+  aggregator = items[0].json?.aggregator ?? {};
+}
+return [{ json: { aggregator, chartUrls: chartMap } }];"
+          }
+        },
+        {
+          "id": "f662b9c8-9393-49fa-936a-ad9a23eb439f",
+          "name": "Build Digest Email",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            1860,
+            340
+          ],
+          "parameters": {
+            "functionCode": "const adminEmail = $env.ADMIN_EMAIL;\nif (!adminEmail) { throw new Error('ADMIN_EMAIL is not configured'); }\nconst chartUrls = $json.chartUrls ?? {};\nconst data = $json.aggregator ?? {};\nconst weekLabel = data.weekLabel ?? '';\nif (!data.hasData) {\n  const html = `<p>No social metrics were recorded for ${weekLabel}.`;
+  return [{ json: { toEmail: adminEmail, subject: `Social metrics digest (${weekLabel})`, html } }];
+}
+const nf0 = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const pf1 = new Intl.NumberFormat('en-GB', { style: 'percent', maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const overall = data.overall || {};
+const perChannel = data.perChannel || [];
+const viewsChart = chartUrls['views_sparkline'] || '';
+const ctrChart = chartUrls['ctr_sparkline'] || '';
+const channelRows = perChannel.map(ch => {
+  const er = ch.engagementRate || 0;
+  const ctr = ch.ctr || 0;
+  return `<tr>\n    <td>${ch.channelName}</td>\n    <td>${nf0.format(ch.views)}</td>\n    <td>${pf1.format(er)}</td>\n    <td>${nf0.format(ch.savesShares)}</td>\n    <td>${nf0.format(ch.profileVisits)}</td>\n    <td>${pf1.format(ctr)}</td>\n    <td>${nf0.format(ch.leads)}</td>\n  </tr>`;
+}).join('\n');
+const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Social metrics digest</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #0f172a; background: #f8fafc; padding: 24px; }
+    h1 { font-size: 20px; margin-bottom: 16px; }
+    .summary { margin-bottom: 20px; }
+    .cards { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; min-width: 160px; }
+    .card h3 { font-size: 12px; text-transform: uppercase; margin-bottom: 8px; color: #475569; }
+    .card p { font-size: 20px; margin: 0; }
+    table { width: 100%; border-collapse: collapse; background: #ffffff; }
+    th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+    th { background: #e2e8f0; text-transform: uppercase; font-size: 12px; letter-spacing: 0.04em; }
+    .charts img { max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Social metrics digest (${weekLabel})</h1>
+  <div class="summary cards">
+    <div class="card"><h3>Views</h3><p>${nf0.format(overall.views || 0)}</p></div>
+    <div class="card"><h3>Engagement rate</h3><p>${pf1.format(overall.engagementRate || 0)}</p></div>
+    <div class="card"><h3>CTR</h3><p>${pf1.format(overall.ctr || 0)}</p></div>
+    <div class="card"><h3>Leads</h3><p>${nf0.format(overall.leads || 0)}</p></div>
+  </div>
+  <div class="charts">
+    ${viewsChart ? `<h2>Views trend</h2><img src="${viewsChart}" alt="Views sparkline" />` : ''}
+    ${ctrChart ? `<h2>CTR trend</h2><img src="${ctrChart}" alt="CTR sparkline" />` : ''}
+  </div>
+  <h2>Performance by channel</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Channel</th>
+        <th>Views</th>
+        <th>Eng. rate</th>
+        <th>Saves + Shares</th>
+        <th>Profile visits</th>
+        <th>CTR</th>
+        <th>Leads</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${channelRows || '<tr><td colspan="7">No channel data available</td></tr>'}
+    </tbody>
+  </table>
+</body>
+</html>`;
+return [{ json: { toEmail: adminEmail, subject: `Social metrics digest (${weekLabel})`, html } }];"
+          }
+        },
+        {
+          "id": "e4b3dfa4-6dd1-4f22-8086-94bb1e3917f4",
+          "name": "Send Digest Email",
+          "type": "n8n-nodes-base.emailSend",
+          "typeVersion": 2,
+          "position": [
+            2080,
+            340
+          ],
+          "parameters": {
+            "fromEmail": "={{ $env.SMTP_FROM ?? 'noreply@local.test' }}",
+            "toEmail": "={{ $json.toEmail }}",
+            "subject": "={{ $json.subject }}",
+            "html": "={{ $json.html }}"
+          },
+          "credentials": {
+            "smtp": {
+              "name": "SMTP (Operations)"
+            }
+          }
+        }
+      ],
+      "connections": {
+        "Metrics Digest Cron": {
+          "main": [
+            [
+              {
+                "node": "Compute Metrics Window",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Compute Metrics Window": {
+          "main": [
+            [
+              {
+                "node": "Add Window Context",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Add Window Context": {
+          "main": [
+            [
+              {
+                "node": "Fetch Buffer Metrics",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Fetch Buffer Metrics": {
+          "main": [
+            [
+              {
+                "node": "Attach Window Metadata",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Attach Window Metadata": {
+          "main": [
+            [
+              {
+                "node": "Process Buffer Metrics",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Process Buffer Metrics": {
+          "main": [
+            [
+              {
+                "node": "Has Metrics?",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Compute KPIs",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Has Metrics?": {
+          "main": [
+            [
+              {
+                "node": "Upsert Metrics",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Compute KPIs": {
+          "main": [
+            [
+              {
+                "node": "Build Chart Payloads",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Build Chart Payloads": {
+          "main": [
+            [
+              {
+                "node": "Split Chart Requests",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Split Chart Requests": {
+          "main": [
+            [
+              {
+                "node": "Chart Config?",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Chart Config?": {
+          "main": [
+            [
+              {
+                "node": "No Chart Placeholder",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Create Sparkline",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "No Chart Placeholder": {
+          "main": [
+            [
+              {
+                "node": "Collect Charts",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Create Sparkline": {
+          "main": [
+            [
+              {
+                "node": "Set Chart Result",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Set Chart Result": {
+          "main": [
+            [
+              {
+                "node": "Collect Charts",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Collect Charts": {
+          "main": [
+            [
+              {
+                "node": "Build Digest Email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Build Digest Email": {
+          "main": [
+            [
+              {
+                "node": "Send Digest Email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        {
+          "name": "metrics"
+        }
+      ]
+    }
+  ]
+}

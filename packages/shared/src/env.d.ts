@@ -1,0 +1,74 @@
+import { z } from 'zod';
+declare const envSchema: z.ZodEffects<z.ZodObject<{
+    NODE_ENV: z.ZodDefault<z.ZodEnum<["development", "test", "production"]>>;
+    OPENAI_API_KEY: z.ZodString;
+    BUFFER_ACCESS_TOKEN: z.ZodString;
+    GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: z.ZodString;
+    SMTP_URL: z.ZodString;
+    SUPABASE_URL: z.ZodString;
+    SUPABASE_ANON_KEY: z.ZodString;
+    RUNWAY_API_KEY: z.ZodString;
+    PIKA_API_KEY: z.ZodOptional<z.ZodString>;
+    REAL_ESRGAN_BIN: z.ZodOptional<z.ZodString>;
+    WEBHOOK_SIGNING_SECRET: z.ZodOptional<z.ZodString>;
+    TIMEZONE: z.ZodDefault<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    NODE_ENV: "development" | "test" | "production";
+    OPENAI_API_KEY: string;
+    BUFFER_ACCESS_TOKEN: string;
+    GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: string;
+    SMTP_URL: string;
+    SUPABASE_URL: string;
+    SUPABASE_ANON_KEY: string;
+    RUNWAY_API_KEY: string;
+    TIMEZONE: string;
+    PIKA_API_KEY?: string | undefined;
+    REAL_ESRGAN_BIN?: string | undefined;
+    WEBHOOK_SIGNING_SECRET?: string | undefined;
+}, {
+    OPENAI_API_KEY: string;
+    BUFFER_ACCESS_TOKEN: string;
+    GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: string;
+    SMTP_URL: string;
+    SUPABASE_URL: string;
+    SUPABASE_ANON_KEY: string;
+    RUNWAY_API_KEY: string;
+    NODE_ENV?: "development" | "test" | "production" | undefined;
+    PIKA_API_KEY?: string | undefined;
+    REAL_ESRGAN_BIN?: string | undefined;
+    WEBHOOK_SIGNING_SECRET?: string | undefined;
+    TIMEZONE?: string | undefined;
+}>, {
+    TIMEZONE: string;
+    NODE_ENV: "development" | "test" | "production";
+    OPENAI_API_KEY: string;
+    BUFFER_ACCESS_TOKEN: string;
+    GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: string;
+    SMTP_URL: string;
+    SUPABASE_URL: string;
+    SUPABASE_ANON_KEY: string;
+    RUNWAY_API_KEY: string;
+    PIKA_API_KEY?: string | undefined;
+    REAL_ESRGAN_BIN?: string | undefined;
+    WEBHOOK_SIGNING_SECRET?: string | undefined;
+}, {
+    OPENAI_API_KEY: string;
+    BUFFER_ACCESS_TOKEN: string;
+    GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: string;
+    SMTP_URL: string;
+    SUPABASE_URL: string;
+    SUPABASE_ANON_KEY: string;
+    RUNWAY_API_KEY: string;
+    NODE_ENV?: "development" | "test" | "production" | undefined;
+    PIKA_API_KEY?: string | undefined;
+    REAL_ESRGAN_BIN?: string | undefined;
+    WEBHOOK_SIGNING_SECRET?: string | undefined;
+    TIMEZONE?: string | undefined;
+}>;
+export type AppEnv = z.infer<typeof envSchema>;
+export declare const loadEnv: (options?: {
+    path?: string;
+}) => AppEnv;
+export declare const getEnv: () => AppEnv;
+export declare const resetEnvCacheForTesting: () => void;
+export {};

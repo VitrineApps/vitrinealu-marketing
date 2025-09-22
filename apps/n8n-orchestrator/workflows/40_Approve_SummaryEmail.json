@@ -1,0 +1,223 @@
+{
+  "meta": {
+    "instanceId": "template",
+    "generatedAt": "2025-09-21T00:00:00.000Z",
+    "n8nVersion": "1.67.1"
+  },
+  "workflows": [
+    {
+      "id": "4d24f4ed-1e01-4b4c-9f9b-87217ec44f82",
+      "name": "40_Approve_SummaryEmail",
+      "active": false,
+      "nodes": [
+        {
+          "id": "caf1042b-c19a-44fd-b9ac-84ffb0d1b6a5",
+          "name": "Weekly Summary Cron",
+          "type": "n8n-nodes-base.cron",
+          "typeVersion": 1,
+          "position": [
+            -1280,
+            300
+          ],
+          "parameters": {
+            "mode": "custom",
+            "custom": {
+              "cronExpression": "0 9 * * 6"
+            }
+          }
+        },
+        {
+          "id": "eb73ef76-94e7-477c-832c-b3712cfc5a84",
+          "name": "Compute Summary Window",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            -1040,
+            300
+          ],
+          "parameters": {
+            "functionCode": "const tz = $env.TIMEZONE ?? 'Europe/London';\nconst now = new Date();\nconst startOfTodayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));\nconst dow = startOfTodayUTC.getUTCDay();\nconst offsetToNextMonday = (8 - dow) % 7;\nconst weekStart = new Date(startOfTodayUTC);\nweekStart.setUTCDate(weekStart.getUTCDate() + offsetToNextMonday);\nweekStart.setUTCHours(9, 0, 0, 0);\nconst weekEnd = new Date(weekStart);\nweekEnd.setUTCDate(weekEnd.getUTCDate() + 7);\nconst formatter = new Intl.DateTimeFormat('en-GB', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });\nconst weekLabel = `${formatter.format(weekStart)} – ${formatter.format(weekEnd)}`;\nreturn [{ json: { weekStartISO: weekStart.toISOString(), weekEndISO: weekEnd.toISOString(), weekLabel } }];"
+          }
+        },
+        {
+          "id": "4c5bf672-a942-4f21-9873-af633f8b73b5",
+          "name": "Fetch Pending Posts",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            -820,
+            300
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "getMany",
+            "schema": "public",
+            "table": "posts",
+            "returnAll": true,
+            "queryParametersUi": {
+              "parameter": [
+                {
+                  "name": "select",
+                  "value": "id,asset_id,slot_name,scheduled_at,caption,platforms,variant_url"
+                },
+                {
+                  "name": "status",
+                  "value": "eq.AWAITING_APPROVAL"
+                },
+                {
+                  "name": "scheduled_at",
+                  "value": "gte.={{ $node['Compute Summary Window'].json['weekStartISO'] }}"
+                },
+                {
+                  "name": "scheduled_at",
+                  "value": "lt.={{ $node['Compute Summary Window'].json['weekEndISO'] }}"
+                },
+                {
+                  "name": "order",
+                  "value": "scheduled_at.asc"
+                }
+              ]
+            }
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "id": "f27bfa6d-2ad5-4dbc-b166-b96e3986131d",
+          "name": "Attach Window Label",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -600,
+            300
+          ],
+          "parameters": {
+            "values": {
+              "string": [
+                {
+                  "name": "weekLabel",
+                  "value": "={{ $node['Compute Summary Window'].json['weekLabel'] }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "6d1b1037-9fd7-4f62-918e-5534cd6ec0ec",
+          "name": "Build Summary Email",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            -360,
+            300
+          ],
+          "parameters": {
+            "functionCode": "const crypto = require('crypto');\nif (items.length === 0) {\n  return [];\n}\nconst secret = $env.APPROVAL_HMAC_SECRET;\nif (!secret) {\n  throw new Error('APPROVAL_HMAC_SECRET is not configured');\n}\nconst baseUrl = $env.APPROVAL_BASE_URL ?? 'https://approve.localhost/approve';\nconst toEmail = $env.APPROVAL_SUMMARY_TO ?? $env.ADMIN_EMAIL;\nif (!toEmail) {\n  throw new Error('Set APPROVAL_SUMMARY_TO or ADMIN_EMAIL for summary delivery');\n}\nconst tz = $env.TIMEZONE ?? 'Europe/London';\nconst weekLabel = items[0].json.weekLabel ?? '';\nconst template = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="utf-8" />\n  <title>Weekly Draft Approvals</title>\n  <style>\n    body { font-family: Arial, sans-serif; color: #0f172a; background: #f8fafc; padding: 24px; }\n    h1 { font-size: 20px; margin-bottom: 16px; }\n    table.summary { width: 100%; border-collapse: collapse; background: #ffffff; }\n    table.summary th, table.summary td { border: 1px solid #e2e8f0; padding: 12px; vertical-align: top; }\n    table.summary th { background: #e2e8f0; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }\n    td.thumb { width: 120px; }\n    td.thumb img { max-width: 110px; border-radius: 8px; display: block; }\n    td.caption { max-width: 340px; }\n    a.approve { color: #047857; font-weight: 600; margin-right: 12px; text-decoration: none; }\n    a.reject { color: #b91c1c; font-weight: 600; text-decoration: none; }\n    .meta { color: #475569; font-size: 13px; margin-bottom: 24px; }\n  </style>\n</head>\n<body>\n  <h1>Content awaiting approval ({{WEEK_LABEL}})</h1>\n  <p class="meta">Approve or request changes with one click. Links expire when the post is approved or rejected.</p>\n  <table class="summary">\n    <thead>\n      <tr>\n        <th>Preview</th>\n        <th>Slot / Channels</th>\n        <th>Caption</th>\n        <th>Scheduled</th>\n        <th>Actions</th>\n      </tr>\n    </thead>\n    <tbody>\n      {{CONTENT_ROWS}}\n    </tbody>\n  </table>\n</body>\n</html>`;\nconst escapeHtml = (value) => {
+  return (value || '').toString().replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+};\nconst rows = items.map((item) => {
+  const data = item.json;
+  const postId = data.id;
+  const caption = (data.caption || '').trim();
+  const platforms = Array.isArray(data.platforms) ? data.platforms : (data.platforms ? [].concat(data.platforms) : []);
+  const channelsLabel = platforms.join(', ');
+  const scheduledISO = data.scheduled_at;
+  const scheduledLabel = scheduledISO ? new Date(scheduledISO).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short', timeZone: tz }) : 'TBC';
+  const approveToken = crypto.createHmac('sha256', secret).update(`${postId}:approve`).digest('hex');
+  const rejectToken = crypto.createHmac('sha256', secret).update(`${postId}:reject`).digest('hex');
+  const approveUrl = `${baseUrl}?id=${encodeURIComponent(postId)}&decision=approve&token=${approveToken}`;
+  const rejectUrl = `${baseUrl}?id=${encodeURIComponent(postId)}&decision=reject&token=${rejectToken}`;
+  const thumbnail = data.variant_url || '';
+  return `<tr>\n    <td class="thumb">${thumbnail ? `<img src="${thumbnail}" alt="Preview" />` : ''}</td>\n    <td>\n      <strong>${escapeHtml(data.slot_name || 'Content Slot')}</strong><br/>\n      <small>${escapeHtml(channelsLabel)}</small>\n    </td>\n    <td class="caption">${escapeHtml(caption) || '<em>No caption</em>'}</td>\n    <td>${escapeHtml(scheduledLabel)}</td>\n    <td>\n      <a class="approve" href="${approveUrl}">Approve</a>\n      <a class="reject" href="${rejectUrl}">Reject</a>\n    </td>\n  </tr>`;
+}).join('\n');\nconst html = template.replace('{{WEEK_LABEL}}', weekLabel).replace('{{CONTENT_ROWS}}', rows || '<tr><td colspan="5">No pending drafts</td></tr>');\nconst subject = `Draft approvals for ${weekLabel}`;\nreturn [{ json: { subject, html, toEmail: toEmail } }];"
+          }
+        },
+        {
+          "id": "8b92d4d2-3fff-4cd4-860e-3f4ecdce2745",
+          "name": "Send Summary Email",
+          "type": "n8n-nodes-base.emailSend",
+          "typeVersion": 2,
+          "position": [
+            -120,
+            300
+          ],
+          "parameters": {
+            "fromEmail": "={{ $env.SMTP_FROM ?? 'noreply@local.test' }}",
+            "toEmail": "={{ $json.toEmail }}",
+            "subject": "={{ $json.subject }}",
+            "html": "={{ $json.html }}"
+          },
+          "credentials": {
+            "smtp": {
+              "name": "SMTP (Operations)"
+            }
+          }
+        }
+      ],
+      "connections": {
+        "Weekly Summary Cron": {
+          "main": [
+            [
+              {
+                "node": "Compute Summary Window",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Compute Summary Window": {
+          "main": [
+            [
+              {
+                "node": "Fetch Pending Posts",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Fetch Pending Posts": {
+          "main": [
+            [
+              {
+                "node": "Attach Window Label",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Attach Window Label": {
+          "main": [
+            [
+              {
+                "node": "Build Summary Email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Build Summary Email": {
+          "main": [
+            [
+              {
+                "node": "Send Summary Email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        {
+          "name": "approval"
+        }
+      ]
+    }
+  ]
+}

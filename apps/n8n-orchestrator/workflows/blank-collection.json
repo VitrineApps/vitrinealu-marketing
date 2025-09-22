@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "instanceId": "template",
+    "generatedAt": "2025-09-21T00:00:00.000Z",
+    "n8nVersion": "1.67.1"
+  },
+  "folders": [
+    {
+      "id": "folder-00-utils",
+      "name": "00_Utils",
+      "type": "default",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "folder-10-ingest",
+      "name": "10_Ingest",
+      "type": "default",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "folder-20-create",
+      "name": "20_Create",
+      "type": "default",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "folder-30-schedule",
+      "name": "30_Schedule",
+      "type": "default",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "folder-40-approve",
+      "name": "40_Approve",
+      "type": "default",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "folder-50-metrics",
+      "name": "50_Metrics",
+      "type": "default",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "workflows": []
+}

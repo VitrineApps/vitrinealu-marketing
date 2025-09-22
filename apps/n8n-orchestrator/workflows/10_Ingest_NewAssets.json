@@ -1,0 +1,548 @@
+{
+  "meta": {
+    "instanceId": "template",
+    "generatedAt": "2025-09-21T00:00:00.000Z",
+    "n8nVersion": "1.67.1"
+  },
+  "workflows": [
+    {
+      "id": "2f8647f0-0a63-4c4b-9079-af1ec1460b24",
+      "name": "10_Ingest_NewAssets",
+      "active": false,
+      "nodes": [
+        {
+          "parameters": {
+            "resource": "file",
+            "operation": "watch",
+            "filters": {
+              "q": "={{\"'\" + $env.INCOMING_FOLDER_ID + \"' in parents\"}}"
+            },
+            "pollTimes": {
+              "item": [
+                {
+                  "mode": "interval",
+                  "value": 5
+                }
+              ]
+            },
+            "options": {
+              "resolveData": true,
+              "includeTeamDrives": true
+            }
+          },
+          "type": "n8n-nodes-base.googleDriveTrigger",
+          "typeVersion": 2,
+          "position": [
+            -1180,
+            320
+          ],
+          "name": "Watch Incoming Folder",
+          "credentials": {
+            "googleDriveOAuth2Api": {
+              "name": "Google Drive (Service Account)"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "operation": "download",
+            "fileId": "={{ $json[\"id\"] }}",
+            "options": {
+              "downloadFileData": true
+            }
+          },
+          "type": "n8n-nodes-base.googleDrive",
+          "typeVersion": 3,
+          "position": [
+            -960,
+            320
+          ],
+          "name": "Fetch File",
+          "credentials": {
+            "googleDriveOAuth2Api": {
+              "name": "Google Drive (Service Account)"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "method": "POST",
+            "url": "={{ ($env.WORKER_API_URL ?? \"https://api.localhost\") + \"/hash\" }}",
+            "sendBinaryData": true,
+            "binaryPropertyName": "data",
+            "options": {
+              "bodyContentType": "json",
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.WORKER_API_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 300
+            }
+          },
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            -720,
+            320
+          ],
+          "name": "Hash Asset"
+        },
+        {
+          "parameters": {
+            "conditions": {
+              "boolean": [
+                {
+                  "value1": "={{ $json[\"exists\"] }}",
+                  "value2": true
+                }
+              ]
+            }
+          },
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            -480,
+            320
+          ],
+          "name": "Is Duplicate?"
+        },
+        {
+          "parameters": {
+            "value": "Duplicate asset {{$node[\"Watch Incoming Folder\"].json[\"name\"]}} skipped (hash {{$node[\"Hash Asset\"].json[\"hash\"] ?? \"unknown\"}})"
+          },
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -260,
+            140
+          ],
+          "name": "Duplicate Logged",
+          "parametersOptions": {
+            "ignoreWorkflowData": false
+          }
+        },
+        {
+          "parameters": {
+            "method": "POST",
+            "url": "={{ ($env.WORKER_API_URL ?? \"https://api.localhost\") + \"/score\" }}",
+            "sendBinaryData": true,
+            "binaryPropertyName": "data",
+            "options": {
+              "bodyContentType": "json",
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.WORKER_API_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 300
+            }
+          },
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            -260,
+            500
+          ],
+          "name": "Score Asset"
+        },
+        {
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "string": [
+                {
+                  "name": "hash",
+                  "value": "={{ $node[\"Hash Asset\"].json[\"hash\"] }}"
+                },
+                {
+                  "name": "fileName",
+                  "value": "={{ $node[\"Watch Incoming Folder\"].json[\"name\"] }}"
+                },
+                {
+                  "name": "mimeType",
+                  "value": "={{ $node[\"Watch Incoming Folder\"].json[\"mimeType\"] }}"
+                },
+                {
+                  "name": "createdAt",
+                  "value": "={{ $node[\"Watch Incoming Folder\"].json[\"createdTime\"] ?? $node[\"Watch Incoming Folder\"].json[\"createdAt\"] }}"
+                },
+                {
+                  "name": "googleFileId",
+                  "value": "={{ $node[\"Watch Incoming Folder\"].json[\"id\"] }}"
+                }
+              ],
+              "number": [
+                {
+                  "name": "fileSize",
+                  "value": "={{ Number($node[\"Watch Incoming Folder\"].json[\"size\"] ?? $node[\"Fetch File\"].json[\"size\"]) }}"
+                },
+                {
+                  "name": "score",
+                  "value": "={{ Number($node[\"Score Asset\"].json[\"score\"] ?? 0) }}"
+                }
+              ],
+              "boolean": [
+                {
+                  "name": "isCandidate",
+                  "value": "={{ $node[\"Score Asset\"].json[\"isCandidate\"] === true }}"
+                }
+              ],
+              "json": [
+                {
+                  "name": "exif",
+                  "value": "={{ $node[\"Score Asset\"].json[\"metadata\"][\"exif\"] ?? {} }}"
+                }
+              ]
+            }
+          },
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -20,
+            500
+          ],
+          "name": "Build Asset Record"
+        },
+        {
+          "parameters": {
+            "resource": "restApi",
+            "operation": "insert",
+            "schema": "public",
+            "table": "assets",
+            "jsonParameters": true,
+            "data": "={{ [{\"hash\": $json.hash, \"file_name\": $json.fileName, \"file_size\": $json.fileSize, \"mime_type\": $json.mimeType, \"created_at\": $json.createdAt, \"exif\": $json.exif, \"score\": $json.score, \"is_candidate\": $json.isCandidate, \"google_file_id\": $json.googleFileId}] }}"
+          },
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            220,
+            500
+          ],
+          "name": "Upsert Asset",
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "conditions": {
+              "boolean": [
+                {
+                  "value1": "={{ $json.isCandidate }}",
+                  "value2": true
+                }
+              ]
+            }
+          },
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            460,
+            500
+          ],
+          "name": "Is Candidate?"
+        },
+        {
+          "parameters": {
+            "operation": "move",
+            "fileId": "={{ $node[\"Watch Incoming Folder\"].json[\"id\"] }}",
+            "options": {
+              "addParents": [
+                "={{ $env.SELECTED_FOLDER_ID }}"
+              ],
+              "removeParents": [
+                "={{ $env.INCOMING_FOLDER_ID }}"
+              ]
+            }
+          },
+          "type": "n8n-nodes-base.googleDrive",
+          "typeVersion": 3,
+          "position": [
+            700,
+            360
+          ],
+          "name": "Move to Selected",
+          "credentials": {
+            "googleDriveOAuth2Api": {
+              "name": "Google Drive (Service Account)"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "value": "Asset {{$json.fileName}} stored without move (score {{$json.score}})"
+          },
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            700,
+            660
+          ],
+          "name": "Non Candidate Logged",
+          "parametersOptions": {
+            "ignoreWorkflowData": false
+          }
+        }
+      ],
+      "connections": {
+        "Watch Incoming Folder": {
+          "main": [
+            [
+              {
+                "node": "Fetch File",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Fetch File": {
+          "main": [
+            [
+              {
+                "node": "Hash Asset",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Hash Asset": {
+          "main": [
+            [
+              {
+                "node": "Is Duplicate?",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Is Duplicate?": {
+          "main": [
+            [
+              {
+                "node": "Duplicate Logged",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Score Asset",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Score Asset": {
+          "main": [
+            [
+              {
+                "node": "Build Asset Record",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Build Asset Record": {
+          "main": [
+            [
+              {
+                "node": "Upsert Asset",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Upsert Asset": {
+          "main": [
+            [
+              {
+                "node": "Is Candidate?",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Is Candidate?": {
+          "main": [
+            [
+              {
+                "node": "Move to Selected",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Non Candidate Logged",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        {
+          "name": "ingest"
+        }
+      ]
+    },
+    {
+      "id": "b6f789df-6aa6-4c8f-8196-fb615f1a2a5d",
+      "name": "10_Ingest_NewAssets_ErrorHandler",
+      "active": false,
+      "nodes": [
+        {
+          "parameters": {},
+          "type": "n8n-nodes-base.errorTrigger",
+          "typeVersion": 1,
+          "position": [
+            -520,
+            280
+          ],
+          "name": "Error Trigger"
+        },
+        {
+          "parameters": {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json[\"workflow\"][\"name\"] }}",
+                  "operation": "equal",
+                  "value2": "10_Ingest_NewAssets"
+                }
+              ]
+            }
+          },
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            -280,
+            280
+          ],
+          "name": "Is ingest workflow?"
+        },
+        {
+          "parameters": {
+            "keepOnlySet": true,
+            "values": {
+              "string": [
+                {
+                  "name": "subject",
+                  "value": "={{ \"Ingest failed for \" + ($json[\"error\"][\"item\"][\"name\"] ?? $json[\"execution\"][\"lastNodeExecuted\"] ?? \"unknown asset\") }}"
+                },
+                {
+                  "name": "body",
+                  "value": "={{ \"Workflow: \" + $json.workflow.name + \"\\nNode: \" + $json.execution.lastNodeExecuted + \"\\nError: \" + $json.error.message + \"\\nExecution: \" + $json.execution.id }}"
+                }
+              ]
+            }
+          },
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -40,
+            160
+          ],
+          "name": "Prepare Email"
+        },
+        {
+          "parameters": {
+            "options": {},
+            "fromEmail": "={{ $env.SMTP_FROM ?? \"noreply@local.test\" }}",
+            "toEmail": "={{ $env.ADMIN_EMAIL }}",
+            "subject": "={{ $json.subject }}",
+            "text": "={{ $json.body }}"
+          },
+          "type": "n8n-nodes-base.emailSend",
+          "typeVersion": 2,
+          "position": [
+            200,
+            160
+          ],
+          "name": "Send Failure Email",
+          "credentials": {
+            "smtp": {
+              "name": "SMTP (Operations)"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "value": "Non-ingest error ignored"
+          },
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -40,
+            420
+          ],
+          "name": "Ignore Other Workflows"
+        }
+      ],
+      "connections": {
+        "Error Trigger": {
+          "main": [
+            [
+              {
+                "node": "Is ingest workflow?",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Is ingest workflow?": {
+          "main": [
+            [
+              {
+                "node": "Prepare Email",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Ignore Other Workflows",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Prepare Email": {
+          "main": [
+            [
+              {
+                "node": "Send Failure Email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        {
+          "name": "ingest"
+        }
+      ]
+    }
+  ]
+}

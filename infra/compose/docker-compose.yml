@@ -1,0 +1,103 @@
+version: '3.9'
+
+services:
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --serversTransport.insecureSkipVerify=true
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/certs:/etc/traefik/certs:ro
+    networks:
+      - edge
+
+  n8n:
+    build:
+      context: ../..
+      dockerfile: apps/n8n-orchestrator/Dockerfile
+    env_file:
+      - ../env/.env
+    environment:
+      - N8N_HOST=n8n.localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - N8N_USER_FOLDER=/data
+      - N8N_DEFAULT_TIMEZONE=${TIMEZONE:-Europe/London}
+      - N8N_EXECUTIONS_RETRY_COUNT=3
+      - N8N_TELEMETRY_ENABLED=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - GENERIC_TIMEZONE=${TIMEZONE:-Europe/London}
+    depends_on:
+      - worker
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.n8n.rule=Host(`n8n.localhost`)
+      - traefik.http.routers.n8n.entrypoints=websecure
+      - traefik.http.routers.n8n.tls=true
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
+    networks:
+      - edge
+    volumes:
+      - n8n_data:/data
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    env_file:
+      - ../env/.env
+    environment:
+      - PORT=3001
+      - HOST=0.0.0.0
+      - TOPAZ_CLI
+      - REAL_ESRGAN_BIN=/opt/realesrgan/realesrgan-ncnn-vulkan
+      - ENHANCE_DEFAULT_SCALE=2
+      - ENHANCE_KEEP_SCALE=1
+      - PYTHON_BIN=python3
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.worker.rule=Host(`api.localhost`)
+      - traefik.http.routers.worker.entrypoints=websecure
+      - traefik.http.routers.worker.tls=true
+      - traefik.http.services.worker.loadbalancer.server.port=3001
+    networks:
+      - edge
+    volumes:
+      # Bind REAL_ESRGAN_BIN if using host path (e.g., for Windows: "${REAL_ESRGAN_BIN}:/usr/local/bin/realesrgan-ncnn-vulkan:ro")
+      # - ${REAL_ESRGAN_BIN}:/usr/local/bin/realesrgan-ncnn-vulkan:ro
+
+  web-approvals:
+    build:
+      context: ../..
+      dockerfile: apps/web-approvals/Dockerfile
+    env_file:
+      - ../env/.env
+    environment:
+      - PORT=3000
+      - NEXT_PUBLIC_API_BASE_URL=https://api.localhost
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.approvals.rule=Host(`approve.localhost`)
+      - traefik.http.routers.approvals.entrypoints=websecure
+      - traefik.http.routers.approvals.tls=true
+      - traefik.http.services.approvals.loadbalancer.server.port=3000
+    depends_on:
+      - worker
+    networks:
+      - edge
+
+networks:
+  edge:
+    driver: bridge
+
+volumes:
+  n8n_data:

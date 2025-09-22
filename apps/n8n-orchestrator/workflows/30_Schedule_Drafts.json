@@ -1,0 +1,564 @@
+{
+  "meta": {
+    "instanceId": "template",
+    "generatedAt": "2025-09-21T00:00:00.000Z",
+    "n8nVersion": "1.67.1"
+  },
+  "workflows": [
+    {
+      "id": "5c4a4c42-4d23-4f1d-8288-2a8ea34ef6ab",
+      "name": "30_Schedule_Drafts",
+      "active": false,
+      "nodes": [
+        {
+          "id": "29b1f680-64e4-46f7-a0c1-fa0f234fa3ff",
+          "name": "Weekly Scheduler Trigger",
+          "type": "n8n-nodes-base.cron",
+          "typeVersion": 1,
+          "position": [
+            -1260,
+            300
+          ],
+          "parameters": {
+            "mode": "custom",
+            "custom": {
+              "cronExpression": "0 8 * * 1"
+            }
+          }
+        },
+        {
+          "id": "f51ef017-1c04-4b0b-89cc-3c1e40ff41e8",
+          "name": "Compute Week Window",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            -1040,
+            300
+          ],
+          "parameters": {
+            "functionCode": "const now = new Date();\nconst utcDay = now.getUTCDay(); // 0 = Sunday\nconst offsetToMonday = (utcDay + 6) % 7;\nconst monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));\nmonday.setUTCDate(monday.getUTCDate() - offsetToMonday);\nmonday.setUTCHours(9, 0, 0, 0);\nconst start = monday;\nconst end = new Date(start);\nend.setUTCDate(end.getUTCDate() + 7);\nreturn [{ json: {\n  weekStartISO: start.toISOString(),\n  weekEndISO: end.toISOString()\n}}];"
+          }
+        },
+        {
+          "id": "d5ebbd7f-cb41-4fde-b06b-5983525abca7",
+          "name": "Fetch Variants",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            -820,
+            300
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "getMany",
+            "schema": "public",
+            "table": "variants",
+            "returnAll": true,
+            "queryParametersUi": {
+              "parameter": [
+                {
+                  "name": "select",
+                  "value": "asset_id,variant_type,url,metadata,created_at,assets(file_name)"
+                },
+                {
+                  "name": "created_at",
+                  "value": "gte.={{$node['Compute Week Window'].json['weekStartISO']}}"
+                },
+                {
+                  "name": "created_at",
+                  "value": "lt.={{$node['Compute Week Window'].json['weekEndISO']}}"
+                },
+                {
+                  "name": "order",
+                  "value": "created_at.asc"
+                }
+              ]
+            }
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        },
+        {
+          "id": "1ef7b56d-8041-4f0e-9a1c-5170f47afd4d",
+          "name": "Add Window Info",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -590,
+            300
+          ],
+          "parameters": {
+            "values": {
+              "string": [
+                {
+                  "name": "weekStart",
+                  "value": "={{$node['Compute Week Window'].json['weekStartISO']}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "8fe6dc02-34f9-4e43-957c-0db4368ea5cb",
+          "name": "Organize Slots",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [
+            -350,
+            300
+          ],
+          "parameters": {
+            "functionCode": "const itemsInput = items.map(item => item.json);\nif (itemsInput.length === 0) {\n  return [];\n}\nconst weekStartISO = itemsInput[0].weekStart;\nconst weekStart = new Date(weekStartISO);\nconst templates = [\n  { slotName: 'Monday Reel', slotKey: 'mon_reel', profileGroup: 'reel', variantType: 'reel', dayOffset: 0, time: '09:00' },\n  { slotName: 'Tuesday Carousel', slotKey: 'tue_carousel', profileGroup: 'carousel', variantType: 'cleaned', dayOffset: 1, time: '10:00' },\n  { slotName: 'Thursday LinkedIn', slotKey: 'thu_linkedin', profileGroup: 'linkedin', variantType: 'linkedin', dayOffset: 3, time: '11:00' },\n  { slotName: 'Friday Reel', slotKey: 'fri_reel', profileGroup: 'reel', variantType: 'reel', dayOffset: 4, time: '09:30' }\n];\nconst assetMap = new Map();\nfor (const variant of itemsInput) {\n  const assetId = variant.asset_id;\n  if (!assetMap.has(assetId)) {\n    const assetTitle = variant.assets?.file_name ?? variant.asset_title ?? variant.asset_name ?? assetId;\n    assetMap.set(assetId, { assetId, assetTitle, variants: {} });\n  }\n  assetMap.get(assetId).variants[variant.variant_type] = variant;\n}\nconst assetsList = Array.from(assetMap.values());\nif (assetsList.length === 0) {\n  return [];\n}\nconst results = [];\nlet assetIndex = 0;\nfor (const template of templates) {\n  let chosen = null;\n  for (let idx = assetIndex; idx < assetsList.length; idx++) {\n    const asset = assetsList[idx];\n    if (asset.variants[template.variantType]) {\n      chosen = { asset, template };\n      assetIndex = idx + 1;\n      break;\n    }\n  }\n  if (!chosen) {\n    continue;\n  }\n  const scheduled = new Date(weekStart);\n  scheduled.setUTCDate(scheduled.getUTCDate() + template.dayOffset);\n  const [hour, minute] = template.time.split(':').map(Number);\n  scheduled.setUTCHours(hour, minute, 0, 0);\n  const variantRecord = chosen.asset.variants[template.variantType];\n  results.push({ json: {\n    assetId: chosen.asset.assetId,\n    assetTitle: chosen.asset.assetTitle,\n    slotName: template.slotName,\n    slotKey: template.slotKey,\n    profileGroup: template.profileGroup,\n    variant: {\n      type: template.variantType,\n      url: variantRecord.url,\n      metadata: variantRecord.metadata ?? {},\n      created_at: variantRecord.created_at ?? null\n    },\n    scheduledAt: scheduled.toISOString(),\n    weekStart: weekStartISO\n  }});\n}\nreturn results;"
+          }
+        },
+        {
+          "id": "3d3894ab-86c7-42e4-bc5f-75cf96f5c59d",
+          "name": "Attach Profiles",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -110,
+            300
+          ],
+          "parameters": {
+            "values": {
+              "json": [
+                {
+                  "name": "profileIds",
+                  "value": "={{ $json.profileGroup === 'reel' ? [$env.BUFFER_PROFILE_ID_IG, $env.BUFFER_PROFILE_ID_FB, $env.BUFFER_PROFILE_ID_TIKTOK, $env.BUFFER_PROFILE_ID_YT_SHORTS].filter(Boolean) : $json.profileGroup === 'carousel' ? [$env.BUFFER_PROFILE_ID_IG, $env.BUFFER_PROFILE_ID_FB].filter(Boolean) : $json.profileGroup === 'linkedin' ? [$env.BUFFER_PROFILE_ID_LINKEDIN].filter(Boolean) : [] }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "6d96cbf0-1a5c-47e5-958f-0a978a95ebe7",
+          "name": "Generate Caption",
+          "type": "n8n-nodes-base.openAi",
+          "typeVersion": 1,
+          "position": [
+            130,
+            300
+          ],
+          "parameters": {
+            "resource": "chat",
+            "operation": "chat",
+            "model": "gpt-4o-mini",
+            "messages": [
+              {
+                "role": "system",
+                "content": "={{ $env.SCHEDULER_SYSTEM_PROMPT ?? 'You are a marketing copywriter creating social media captions that are concise, on-brand, and include a clear CTA.' }}"
+              },
+              {
+                "role": "user",
+                "content": "={{ `Create a social caption for ${$json.slotName}. Asset title: ${$json.assetTitle}. Variant type: ${$json.variant.type}. Metadata: ${JSON.stringify($json.variant.metadata || {})}. Provide engaging copy with relevant hashtags and a strong call to action. Return plain text.` }}"
+              }
+            ]
+          },
+          "credentials": {
+            "openAiApi": {
+              "name": "OpenAI (Workspace)"
+            }
+          }
+        },
+        {
+          "id": "7f1c803d-5a99-49f8-9c81-580117abfbba",
+          "name": "Extract Caption",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            370,
+            300
+          ],
+          "parameters": {
+            "values": {
+              "string": [
+                {
+                  "name": "caption",
+                  "value": "={{ $json.choices[0].message.content ?? '' }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "6fdb15be-69f4-4dea-958e-1f4a5039bd2e",
+          "name": "Prepare Buffer Draft",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            610,
+            300
+          ],
+          "parameters": {
+            "values": {
+              "json": [
+                {
+                  "name": "bufferPayload",
+                  "value": "={{ { text: $json.caption, profile_ids: $json.profileIds, now: false, draft: true, scheduled_at: $json.scheduledAt, media: { link: $json.variant.url } } }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "66b0b62d-17c3-4fc9-9957-90bb51a8e195",
+          "name": "Create Buffer Draft",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4,
+          "position": [
+            850,
+            300
+          ],
+          "parameters": {
+            "method": "POST",
+            "url": "https://api.bufferapp.com/1/updates/create.json",
+            "jsonParameters": true,
+            "body": "={{ $json.bufferPayload }}",
+            "options": {
+              "headerParametersUi": {
+                "parameter": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{$env.BUFFER_ACCESS_TOKEN}}"
+                  }
+                ]
+              },
+              "timeout": 300
+            }
+          }
+        },
+        {
+          "id": "05477bbd-9094-4eba-99d7-736b2b51d510",
+          "name": "Collect Draft Info",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            1090,
+            300
+          ],
+          "parameters": {
+            "values": {
+              "string": [
+                {
+                  "name": "bufferUpdateId",
+                  "value": "={{ $json.update?.id ?? $json.id ?? '' }}"
+                }
+              ],
+              "json": [
+                {
+                  "name": "platforms",
+                  "value": "={{ $item(0).$node['Attach Profiles'].json['profileIds'] ?? $json.profileIds ?? [] }}"
+                }
+              ]
+            }
+          },
+          "options": {
+            "keepOnlySet": false
+          }
+        },
+        {
+          "id": "4df1d6a5-617d-4bf9-9e36-0ab0fa23b8d7",
+          "name": "Record Draft",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "position": [
+            1330,
+            300
+          ],
+          "parameters": {
+            "resource": "restApi",
+            "operation": "insert",
+            "schema": "public",
+            "table": "posts",
+            "jsonParameters": true,
+            "data": "={{ [{ asset_id: $item(0).$node['Organize Slots'].json['assetId'], slot_name: $item(0).$node['Organize Slots'].json['slotName'], buffer_update_id: $json.bufferUpdateId, status: 'AWAITING_APPROVAL', scheduled_at: $item(0).$node['Organize Slots'].json['scheduledAt'], caption: $item(0).$node['Extract Caption'].json['caption'], platforms: $json.platforms, variant_url: $item(0).$node['Organize Slots'].json['variant'].url, variant_type: $item(0).$node['Organize Slots'].json['variant'].type }] }}"
+          },
+          "credentials": {
+            "supabaseApi": {
+              "name": "Supabase (Service Role)"
+            }
+          }
+        }
+      ],
+      "connections": {
+        "Weekly Scheduler Trigger": {
+          "main": [
+            [
+              {
+                "node": "Compute Week Window",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Compute Week Window": {
+          "main": [
+            [
+              {
+                "node": "Fetch Variants",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Fetch Variants": {
+          "main": [
+            [
+              {
+                "node": "Add Window Info",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Add Window Info": {
+          "main": [
+            [
+              {
+                "node": "Organize Slots",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Organize Slots": {
+          "main": [
+            [
+              {
+                "node": "Attach Profiles",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Attach Profiles": {
+          "main": [
+            [
+              {
+                "node": "Generate Caption",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Generate Caption": {
+          "main": [
+            [
+              {
+                "node": "Extract Caption",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Extract Caption": {
+          "main": [
+            [
+              {
+                "node": "Prepare Buffer Draft",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Prepare Buffer Draft": {
+          "main": [
+            [
+              {
+                "node": "Create Buffer Draft",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Create Buffer Draft": {
+          "main": [
+            [
+              {
+                "node": "Collect Draft Info",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Collect Draft Info": {
+          "main": [
+            [
+              {
+                "node": "Record Draft",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        {
+          "name": "schedule"
+        }
+      ]
+    },
+    {
+      "id": "c3755827-3f27-4f50-b8f6-5ca3f21bfb37",
+      "name": "30_Schedule_Drafts_ErrorHandler",
+      "active": false,
+      "nodes": [
+        {
+          "id": "30b96432-05b8-40d7-ab81-98811b02be08",
+          "name": "Error Trigger",
+          "type": "n8n-nodes-base.errorTrigger",
+          "typeVersion": 1,
+          "position": [
+            -560,
+            200
+          ],
+          "parameters": {}
+        },
+        {
+          "id": "57e23c76-6714-49f7-8416-4f641ca44b0d",
+          "name": "Is scheduler workflow?",
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 1,
+          "position": [
+            -320,
+            200
+          ],
+          "parameters": {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.workflow.name }}",
+                  "operation": "equal",
+                  "value2": "30_Schedule_Drafts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "6586248d-5b18-4e8d-9912-a619e206a6be",
+          "name": "Format Error Email",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -80,
+            120
+          ],
+          "parameters": {
+            "values": {
+              "string": [
+                {
+                  "name": "subject",
+                  "value": "={{ `Scheduling failed: ${$json.error.message}` }}"
+                },
+                {
+                  "name": "body",
+                  "value": "={{ `Workflow: ${$json.workflow.name}\nNode: ${$json.execution.lastNodeExecuted}\nError: ${$json.error.message}\nExecution ID: ${$json.execution.id}` }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "65799b1d-fb80-4a53-8c5e-be3e094e9ff6",
+          "name": "Send Failure Email",
+          "type": "n8n-nodes-base.emailSend",
+          "typeVersion": 2,
+          "position": [
+            160,
+            120
+          ],
+          "parameters": {
+            "fromEmail": "={{ $env.SMTP_FROM ?? 'noreply@local.test' }}",
+            "toEmail": "={{ $env.ADMIN_EMAIL }}",
+            "subject": "={{ $json.subject }}",
+            "text": "={{ $json.body }}"
+          },
+          "credentials": {
+            "smtp": {
+              "name": "SMTP (Operations)"
+            }
+          }
+        },
+        {
+          "id": "35f5374a-4211-4015-afe5-94fb3c0b71c9",
+          "name": "Ignore Other Workflows",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 2,
+          "position": [
+            -80,
+            360
+          ],
+          "parameters": {
+            "values": {
+              "string": [
+                {
+                  "name": "note",
+                  "value": "Non-scheduler error ignored"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "connections": {
+        "Error Trigger": {
+          "main": [
+            [
+              {
+                "node": "Is scheduler workflow?",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Is scheduler workflow?": {
+          "main": [
+            [
+              {
+                "node": "Format Error Email",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "Ignore Other Workflows",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Format Error Email": {
+          "main": [
+            [
+              {
+                "node": "Send Failure Email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}
+
