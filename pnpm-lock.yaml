@@ -68,6 +68,9 @@ importers:
       '@vitrinealu/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@vitrinealu/video-assembler':
+        specifier: workspace:*
+        version: link:../../packages/video-assembler
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -333,6 +336,9 @@ importers:
         specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
+      '@types/fluent-ffmpeg':
+        specifier: ^2.1.21
+        version: 2.1.27
       '@types/fs-extra':
         specifier: ^11.0.1
         version: 11.0.4
@@ -351,6 +357,9 @@ importers:
       ts-jest:
         specifier: ^29.1.1
         version: 29.4.4(@babel/core@7.28.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.4))(esbuild@0.19.12)(jest-util@29.7.0)(jest@29.7.0(@types/node@20.19.17)(ts-node@10.9.2(@types/node@20.19.17)(typescript@5.9.2)))(typescript@5.9.2)
+      tsup:
+        specifier: ^7.2.0
+        version: 7.3.0(postcss@8.5.6)(ts-node@10.9.2(@types/node@20.19.17)(typescript@5.9.2))(typescript@5.9.2)
       typescript:
         specifier: ^5.1.6
         version: 5.9.2
@@ -1701,6 +1710,9 @@ packages:
 
   '@types/express@4.17.23':
     resolution: {integrity: sha512-Crp6WY9aTYP3qPi2wGDo9iUe/rceX01UMhnF1jmwDcKCFM6cx7YhGP/Mpr3y9AASpfHixIG0E6azCcL5OcDHsQ==}
+
+  '@types/fluent-ffmpeg@2.1.27':
+    resolution: {integrity: sha512-QiDWjihpUhriISNoBi2hJBRUUmoj/BMTYcfz+F+ZM9hHWBYABFAE6hjP/TbCZC0GWwlpa3FzvHH9RzFeRusZ7A==}
 
   '@types/fs-extra@11.0.4':
     resolution: {integrity: sha512-yTbItCNreRooED33qjunPthRcSjERP1r4MqCZc7wv0u2sUkzTFp45tgUfS5+r7FrZPdmCCNflLhVSP/o+SemsQ==}
@@ -6874,6 +6886,10 @@ snapshots:
       '@types/express-serve-static-core': 4.19.6
       '@types/qs': 6.14.0
       '@types/serve-static': 1.15.8
+
+  '@types/fluent-ffmpeg@2.1.27':
+    dependencies:
+      '@types/node': 20.19.17
 
   '@types/fs-extra@11.0.4':
     dependencies:

@@ -1,0 +1,10 @@
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  entry: ['src/index.ts'],
+  format: ['esm', 'cjs'],
+  clean: true,
+  outDir: 'dist',
+  external: ['fluent-ffmpeg'],
+  noExternal: ['pino', 'yaml', 'zod'],
+});

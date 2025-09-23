@@ -12,6 +12,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 // Import routes
 import { carouselRoutes } from './routes/carousels.js';
+import { videoRoutes } from './routes/video.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +44,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/carousels', carouselRoutes);
+app.use('/api/video', videoRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

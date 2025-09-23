@@ -16,6 +16,7 @@ from .curation import curation_engine
 from .enhance import enhancer
 from .face_blur import face_blurrer
 from .watermark import watermark_applier
+from .background_client import create_client as create_background_client, BRAND_PRESETS, BGMode, BackgroundClientError
 
 
 class ProcessedDatabase:
@@ -103,6 +104,70 @@ class MediaPipeline:
         with open(json_path, 'w') as f:
             json.dump(metadata, f, indent=2, default=str)
 
+        def process_background(self, temp_output_path: Path) -> Optional[Dict]:
+            """Process background automation if enabled"""
+            if not config.background_automation:
+                return None
+            
+            try:
+                # Create background client
+                background_client = create_background_client()
+            
+                # Check if service is available
+                if not background_client.is_healthy():
+                    print("Background service is not available, skipping background processing")
+                    return None
+            
+                if config.background_automation == "cleanup":
+                    # Clean up background
+                    result = background_client.cleanup(
+                        image_path=temp_output_path,
+                        mode=BGMode.TRANSPARENT,
+                        enhance_fg=True,
+                        denoise=False
+                    )
+                
+                    return {
+                        "mode": "cleanup",
+                        "outJpg": result.out_jpg,
+                        "outPng": result.out_png,
+                        "processedAt": result.processed_at,
+                        "settings": result.settings
+                    }
+                
+                elif config.background_automation == "replace":
+                    # Get brand preset
+                    preset = BRAND_PRESETS.get(config.background_preset, BRAND_PRESETS["vitrinealu"])
+                    prompt = preset["prompts"].get(config.background_prompt_type, preset["prompts"]["studio"])
+                
+                    # Replace background
+                    result = background_client.replace(
+                        image_path=temp_output_path,
+                        prompt=prompt,
+                        negative_prompt=preset["negative_prompt"],
+                        engine=preset["settings"]["engine"],
+                        steps=preset["settings"]["steps"],
+                        guidance_scale=preset["settings"]["guidance_scale"]
+                    )
+                
+                    return {
+                        "mode": "replace",
+                        "engine": result.engine,
+                        "outJpg": result.out_jpg,
+                        "processedAt": result.processed_at,
+                        "prompt": result.prompt,
+                        "settings": result.settings
+                    }
+            
+                return None
+            
+            except BackgroundClientError as e:
+                print(f"Background processing failed: {e}")
+                return None
+            except Exception as e:
+                print(f"Unexpected error in background processing: {e}")
+                return None
+
     def process_file(self, input_path: Path, source: str = "nas") -> Optional[Path]:
         """Process a single media file through the complete pipeline"""
         try:
@@ -147,11 +212,26 @@ class MediaPipeline:
             else:
                 final_pil = watermarked_pil
 
-            # 8. Generate output path and save
+                # 8. Background processing (optional)
+                background_metadata = None
+                if config.background_automation:
+                    try:
+                            # Save temporary image for background processing
+                            temp_path = Path(config.temp_dir) / f"temp_{input_path.stem}.jpg"
+                            final_pil.save(temp_path, quality=95)
+                            background_metadata = self.process_background(temp_path)
+                            # Clean up temp file
+                            if temp_path.exists():
+                                temp_path.unlink()
+                    except Exception as e:
+                        print(f"Background processing failed: {e}")
+                        # Continue without background processing
+
+                # 9. Generate output path and save
             output_path = self.generate_output_path(input_path, scores)
             final_pil.save(output_path, quality=95)
 
-            # 9. Create sidecar metadata
+                # 10. Create sidecar metadata
             metadata = {
                 "source": source,
                 "original_path": str(input_path),
@@ -168,11 +248,12 @@ class MediaPipeline:
                 },
                 "faces_blurred": config.face_blur_enabled,
                 "watermark": config.watermark_path,
-                "brand": "vitrinealu"
+                    "brand": "vitrinealu",
+                    "background": background_metadata
             }
             self.create_sidecar_json(output_path, metadata)
 
-            # 10. Mark as processed
+                # 11. Mark as processed
             self.db.mark_processed(file_hash, str(input_path), str(output_path), source)
 
             print(f"Successfully processed {input_path} -> {output_path}")

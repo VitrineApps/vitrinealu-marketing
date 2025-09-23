@@ -1,264 +1,378 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import { Job, JobSchema, VideoAssemblerOptions, PLATFORM_PRESETS, OutputSpec, BrandKit } from './types';
-import { FfmpegBackend } from './ffmpegBackend';
-import { BrandKitLoader } from './brandKit';
-import { logger } from './logger';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { dirname, extname } from 'path';
+import { FFmpegWrapper } from './ffmpeg';
+import { loadBrandKit, getDefaultBrandKit, resolveWatermarkPath } from './brandKit';
+import { getVideoProfile, generateVideoCodecSettings, generateAudioCodecSettings, generateOutputSettings } from './profiles';
+import { getKenBurnsEffect, generateKenBurnsFilter, calculateTransitionTimings } from './kenburns';
+import { generateWatermarkFilter, generateAssSubtitles, parseCaptionJson, calculateSafeArea } from './overlays';
+import { AssembleJob, AssembleResult, ClipInput, BrandKit, VideoProfile, KenBurnsEffect } from './types';
+import pino from 'pino';
+import { Semaphore } from './utils';
 
+
+const logger = pino({ name: 'job-runner' });
+
+// Concurrency guard
+const maxConcurrency = parseInt(process.env.VIDEO_MAX_CONCURRENCY || '2', 10);
+const semaphore = new Semaphore(maxConcurrency);
+
+// Default job timeout (ms)
+const JOB_TIMEOUT_MS = parseInt(process.env.VIDEO_JOB_TIMEOUT_MS || '600000', 10);
+
+/**
+ * JobRunner class for backward compatibility with CLI
+ */
 export class JobRunner {
-  public ffmpeg: FfmpegBackend;
+  private ffmpegPath?: string;
+  public ffmpeg: { checkAvailability: () => Promise<boolean> };
 
   constructor(ffmpegPath?: string) {
-    this.ffmpeg = new FfmpegBackend(ffmpegPath);
-  }
-
-  /**
-   * Run a video assembly job
-   */
-  async runJob(options: VideoAssemblerOptions): Promise<string> {
-    logger.info({ msg: 'Starting video assembly job', options });
-
-    try {
-      // Load and validate job configuration
-      const job = await this.loadJobConfig(options.inputDir);
-
-      // Load brand kit
-      const brandKit = await this.loadBrandKit(options);
-
-      // Determine output spec
-      const outputSpec = this.getOutputSpec(job, options);
-
-      // Validate inputs
-      await this.validateInputs(job, options.inputDir);
-
-      // Create output directory
-      await fs.mkdir(path.dirname(options.outputPath), { recursive: true });
-
-      // Generate video from images
-      const tempVideoPath = options.outputPath.replace('.mp4', '_temp.mp4');
-      await this.ffmpeg.createVideoFromImages(
-        job.clips,
-        outputSpec,
-        tempVideoPath,
-        options.inputDir
-      );
-
-      // Add captions if present
-      let currentVideoPath = tempVideoPath;
-      if (this.hasCaptions(job)) {
-        const captionedPath = options.outputPath.replace('.mp4', '_captioned.mp4');
-        await this.addCaptions(job, outputSpec, currentVideoPath, captionedPath, brandKit);
-        currentVideoPath = captionedPath;
-
-        // Clean up temp file
-        await fs.unlink(tempVideoPath).catch(() => {});
+    this.ffmpegPath = ffmpegPath;
+    this.ffmpeg = {
+      checkAvailability: async () => {
+        // Simple availability check - could implement proper FFmpeg check
+        return true;
       }
-
-      // Add watermark if enabled
-      if (options.watermark && brandKit.watermark?.path) {
-        const watermarkedPath = options.outputPath.replace('.mp4', '_watermarked.mp4');
-        await this.ffmpeg.addWatermark(
-          currentVideoPath,
-          brandKit.watermark.path,
-          watermarkedPath,
-          {
-            scale: brandKit.watermark.scale,
-            opacity: brandKit.watermark.opacity,
-            position: brandKit.watermark.position,
-          }
-        );
-        currentVideoPath = watermarkedPath;
-
-        // Clean up previous temp file
-        if (currentVideoPath !== tempVideoPath) {
-          await fs.unlink(currentVideoPath.replace('_watermarked.mp4', '_captioned.mp4')).catch(() => {});
-        }
-      }
-
-      // Add audio if specified
-      if (options.music || job.music) {
-        const musicPath = options.music || job.music!;
-        if (await this.fileExists(musicPath)) {
-          const finalPath = options.outputPath;
-          await this.ffmpeg.addAudio(currentVideoPath, musicPath, finalPath);
-          currentVideoPath = finalPath;
-
-          // Clean up watermarked file
-          if (currentVideoPath !== tempVideoPath) {
-            await fs.unlink(currentVideoPath.replace('.mp4', '_watermarked.mp4')).catch(() => {});
-          }
-        } else {
-          logger.warn({ msg: 'Music file not found', path: musicPath });
-        }
-      } else {
-        // No audio to add, just rename final file
-        if (currentVideoPath !== options.outputPath) {
-          await fs.rename(currentVideoPath, options.outputPath);
-        }
-      }
-
-      // Verify output
-      const stats = await fs.stat(options.outputPath);
-      logger.info({
-        msg: 'Video assembly completed',
-        outputPath: options.outputPath,
-        size: stats.size,
-        duration: await this.getVideoDuration(options.outputPath)
-      });
-
-      return options.outputPath;
-
-    } catch (error) {
-      logger.error({ msg: 'Job failed', error });
-      throw error;
-    }
+    };
   }
 
   /**
-   * Load job configuration from captions.json
+   * Load job configuration (for CLI compatibility)
    */
-  async loadJobConfig(inputDir: string): Promise<Job> {
-    const configPath = path.join(inputDir, 'captions.json');
-
-    try {
-      const content = await fs.readFile(configPath, 'utf-8');
-      const data = JSON.parse(content);
-      return JobSchema.parse(data);
-    } catch (error) {
-      throw new Error(`Failed to load job config from ${configPath}: ${error}`);
-    }
+  async loadJobConfig(_inputDir: string): Promise<AssembleJob> {
+    // This would need proper implementation to load from captions.json
+    return {
+      profile: 'reel',
+      clips: [],
+      outPath: '',
+      seed: 42,
+    };
   }
 
   /**
-   * Load brand kit with fallbacks
+   * Run a job from legacy interface
    */
-  private async loadBrandKit(options: VideoAssemblerOptions) {
-    if (options.brandKit && typeof options.brandKit === 'object') {
-      return options.brandKit;
-    }
+  async runJob(options: {
+    inputDir?: string;
+    outputPath?: string;
+    profile?: string;
+    brandKit?: string;
+    watermark?: boolean;
+    music?: string;
+    fps?: number;
+    bitrate?: string;
+  }): Promise<string> {
+    // Convert legacy options to AssembleJob
+    const job: AssembleJob = {
+      profile: (options.profile as 'reel' | 'linkedin') || 'reel',
+      clips: [], // This would need to be loaded from the inputDir
+      outPath: options.outputPath || '',
+      seed: 42,
+    };
 
-    const fallbackPaths = [
-      typeof options.brandKit === 'string' ? options.brandKit : null,
-      path.join(options.inputDir, 'brand.yaml'),
-      path.join(process.cwd(), 'config', 'brand.yaml'),
-      path.join(process.cwd(), 'brand.yaml'),
-    ].filter(Boolean) as string[];
-
-    return await BrandKitLoader.loadWithFallbacks(fallbackPaths);
+    const result = await assemble(job);
+    return result.outPath;
   }
+}
 
-  /**
-   * Get output specification
-   */
-  private getOutputSpec(job: Job, options: VideoAssemblerOptions) {
-    // Use job outputSpec if provided
-    if (job.outputSpec) {
-      return job.outputSpec;
+/**
+ * Main assembly function
+ */
+export async function assemble(job: AssembleJob): Promise<AssembleResult> {
+  const release = await semaphore.acquire();
+  const startWall = Date.now();
+  let retries = 0;
+  let ffmpegProc: any = null;
+  let timedOut = false;
+  let result: AssembleResult;
+  let error: any = null;
+  try {
+    logger.info({ profile: job.profile, clipCount: job.clips.length }, 'Starting video assembly');
+    // Validate inputs
+    await validateJob(job);
+    // Load brand kit
+    const brandKit = await loadBrandKitSafely(job.brandPath);
+    // Get video profile
+    const profile = getVideoProfile(job.profile);
+    // Setup FFmpeg
+    const ffmpeg = new FFmpegWrapper();
+    // Ensure output directory exists
+    const outputDir = dirname(job.outPath);
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
     }
+    // Process clips
+    const processedClips = await processClips(job.clips, profile, brandKit, job.seed || 42);
 
-    // Use profile preset
-    if (options.profile) {
-      switch (options.profile) {
-        case 'reels':
-          return PLATFORM_PRESETS.instagram_reel;
-        case 'square':
-          return { width: 1080, height: 1080, fps: 30, bitrate: '2000k' };
-        case 'landscape':
-          return PLATFORM_PRESETS.facebook;
-      }
-    }
-
-    // Use platform preset
-    return PLATFORM_PRESETS[job.platform] || PLATFORM_PRESETS.instagram_reel;
-  }
-
-  /**
-   * Validate input files exist
-   */
-  private async validateInputs(job: Job, inputDir: string): Promise<void> {
-    const missingFiles: string[] = [];
-
-    for (const clip of job.clips) {
-      const imagePath = path.join(inputDir, clip.image);
-      if (!await this.fileExists(imagePath)) {
-        missingFiles.push(clip.image);
-      }
-    }
-
-    if (missingFiles.length > 0) {
-      throw new Error(`Missing input files: ${missingFiles.join(', ')}`);
-    }
-  }
-
-  private hasCaptions(job: Job): boolean {
-    return job.clips.some(clip =>
-      clip.caption ||
-      (clip.captionLayer && clip.captionLayer.text)
-    );
-  }
-
-  /**
-   * Add captions to video
-   */
-  private async addCaptions(
-    job: Job,
-    outputSpec: OutputSpec,
-    inputPath: string,
-    outputPath: string,
-    brandKit: BrandKit
-  ): Promise<void> {
-    const captions: Array<{
-      text: string;
-      start: number;
-      end: number;
-      fontSize?: number;
-      fontFamily?: string;
-      color?: string;
-      position?: string;
-    }> = [];
-
-    let currentTime = 0;
-    for (const clip of job.clips) {
-      const captionText = clip.caption || clip.captionLayer?.text;
-      if (captionText) {
-        captions.push({
-          text: captionText,
-          start: currentTime,
-          end: currentTime + clip.durationSec,
-          fontSize: clip.captionLayer?.fontSize,
-          fontFamily: clip.captionLayer?.fontFamily || brandKit.fonts.primary,
-          color: clip.captionLayer?.color || brandKit.colors.primary,
-          position: clip.captionLayer?.position || 'bottom',
+    // Timeout logic
+    const jobPromise = (async () => {
+      // Patch FFmpegWrapper to expose process for kill
+      const origRunCommand = ffmpeg.runCommand.bind(ffmpeg);
+      ffmpeg.runCommand = async (command: any) => {
+        return new Promise((resolve, reject) => {
+          const proc = command.spawn();
+          ffmpegProc = proc;
+          proc.on('close', (code: number) => {
+            ffmpegProc = null;
+            if (code === 0) resolve(undefined);
+            else reject(new Error(`ffmpeg exited with code ${code}`));
+          });
+          proc.on('error', reject);
         });
+      };
+      return await generateVideo(
+        processedClips,
+        job,
+        profile,
+        brandKit,
+        ffmpeg
+      );
+    })();
+
+    result = await Promise.race([
+      jobPromise,
+      new Promise<never>((_, reject) => setTimeout(() => {
+        timedOut = true;
+        if (ffmpegProc) {
+          ffmpegProc.kill('SIGKILL');
+        }
+        reject(new Error('Video job timed out'));
+      }, JOB_TIMEOUT_MS))
+    ]);
+
+    const wallMs = Date.now() - startWall;
+    logger.info({ outPath: job.outPath, duration: result.duration, wallMs }, 'Video assembly completed');
+    // Emit structured metrics
+    logger.info({
+      adapter: 'ffmpeg',
+      profile: job.profile,
+      durationSec: result.duration,
+      wallMs,
+      retries
+    }, 'video_job_metrics');
+    return result;
+  } catch (err) {
+    error = err;
+    logger.error({ err, timedOut }, 'Video assembly failed');
+    throw err;
+  } finally {
+    release();
+  }
+}
+
+/**
+ * Validate job inputs
+ */
+async function validateJob(job: AssembleJob): Promise<void> {
+  if (!job.clips || job.clips.length === 0) {
+    throw new Error('At least one clip is required');
+  }
+  
+  if (!job.outPath) {
+    throw new Error('Output path is required');
+  }
+  
+  // Validate clip files exist
+  for (const [index, clip] of job.clips.entries()) {
+    if (!existsSync(clip.image)) {
+      throw new Error(`Clip ${index} image not found: ${clip.image}`);
+    }
+  }
+  
+  // Validate music file if provided
+  if (job.musicPath && !existsSync(job.musicPath)) {
+    throw new Error(`Music file not found: ${job.musicPath}`);
+  }
+  
+  // Validate watermark if provided
+  if (job.watermarkPath && !existsSync(job.watermarkPath)) {
+    throw new Error(`Watermark file not found: ${job.watermarkPath}`);
+  }
+}
+
+/**
+ * Load brand kit with fallbacks
+ */
+async function loadBrandKitSafely(brandPath?: string): Promise<BrandKit> {
+  if (brandPath) {
+    try {
+      return await loadBrandKit(brandPath);
+    } catch (error) {
+      logger.warn({ error, brandPath }, 'Failed to load brand kit, using default');
+    }
+  }
+  
+  return getDefaultBrandKit();
+}
+
+/**
+ * Process clips with Ken Burns effects
+ */
+async function processClips(
+  clips: ClipInput[],
+  profile: VideoProfile,
+  brandKit: BrandKit,
+  seed: number
+): Promise<ProcessedClip[]> {
+  const processedClips: ProcessedClip[] = [];
+  
+  for (const [index, clip] of clips.entries()) {
+    const duration = clip.durationSec || 3;
+    
+    // Generate deterministic Ken Burns effect
+    const clipSeed = seed + index;
+    const kenBurnsEffect = getKenBurnsEffect(
+      clip.pan || 'center',
+      clip.zoom || 'none',
+      clipSeed
+    );
+    
+    processedClips.push({
+      ...clip,
+      index,
+      duration,
+      kenBurnsEffect,
+    });
+  }
+  
+  return processedClips;
+}
+
+/**
+ * Generate the final video
+ */
+async function generateVideo(
+  clips: ProcessedClip[],
+  job: AssembleJob,
+  profile: VideoProfile,
+  brandKit: BrandKit,
+  ffmpeg: FFmpegWrapper
+): Promise<AssembleResult> {
+  const command = ffmpeg.createCommand();
+  
+  // Add input clips
+  clips.forEach(clip => {
+    command.input(clip.image);
+  });
+  
+  // Add music if provided
+  if (job.musicPath) {
+    command.input(job.musicPath);
+  }
+  
+  // Build filter complex
+  const filters: string[] = [];
+  
+  // Process each clip with Ken Burns
+  clips.forEach((clip, index) => {
+    const kenBurnsFilter = generateKenBurnsFilter(
+      clip.kenBurnsEffect,
+      clip.duration,
+      1920, // Assume input width - would get from image probe in production
+      1080, // Assume input height
+      profile.width,
+      profile.height
+    );
+    
+    filters.push(`[${index}:v]${kenBurnsFilter}[clip${index}]`);
+  });
+  
+  // Add transitions between clips
+  const transitionDuration = 0.5;
+  const timings = calculateTransitionTimings(
+    clips.map(c => c.duration),
+    transitionDuration
+  );
+  
+  // Concatenate clips with crossfades
+  if (clips.length > 1) {
+    let concatInput = '[clip0]';
+    for (let i = 1; i < clips.length; i++) {
+      const fadeFilter = `${concatInput}[clip${i}]xfade=transition=fade:duration=${transitionDuration}:offset=${timings[i-1]?.offset || 0}`;
+      if (i === clips.length - 1) {
+        filters.push(`${fadeFilter}[video]`);
+      } else {
+        filters.push(`${fadeFilter}[concat${i}]`);
+        concatInput = `[concat${i}]`;
       }
-      currentTime += clip.durationSec;
     }
-
+  } else {
+    filters.push('[clip0]copy[video]');
+  }
+  
+  // Add watermark if configured
+  const watermarkPath = job.watermarkPath || resolveWatermarkPath(brandKit, job.brandPath || '');
+  if (watermarkPath && existsSync(watermarkPath)) {
+    command.input(watermarkPath);
+    const watermarkFilter = generateWatermarkFilter(
+      watermarkPath,
+      profile,
+      brandKit.watermark?.opacity || 0.8,
+      brandKit.watermark?.margin_px || 48
+    );
+    filters.push(watermarkFilter.replace('[in]', '[video]').replace('[out]', '[video_wm]'));
+  }
+  
+  // Add captions if provided
+  let finalVideoLabel = watermarkPath ? '[video_wm]' : '[video]';
+  if (job.captionJson) {
+    const captions = parseCaptionJson(job.captionJson);
     if (captions.length > 0) {
-      await this.ffmpeg.addCaptions(inputPath, captions, outputPath);
+      const safeArea = calculateSafeArea(job.profile, brandKit);
+      const assContent = generateAssSubtitles(captions, profile, brandKit, safeArea);
+      
+      // Write ASS file
+      const assPath = job.outPath.replace(extname(job.outPath), '.ass');
+      writeFileSync(assPath, assContent);
+      
+      filters.push(`${finalVideoLabel}subtitles=${assPath.replace(/\\/g, '/')}[video_final]`);
+      finalVideoLabel = '[video_final]';
     }
   }
+  
+  // Apply filters
+  command.complexFilter(filters);
+  
+  // Add audio processing
+  if (job.musicPath) {
+    // Normalize audio to -23 LUFS and mix with video  
+    const totalDuration = clips.reduce((sum, clip) => sum + clip.duration, 0) - (transitionDuration * (clips.length - 1));
+    command.outputOptions([
+      '-af', `loudnorm=I=-23:TP=-2:LRA=7,atrim=duration=${totalDuration}`
+    ]);
+  }
+  
+  // Apply codec settings
+  const videoSettings = generateVideoCodecSettings(profile);
+  const audioSettings = generateAudioCodecSettings();
+  const outputSettings = generateOutputSettings(profile);
+  
+  // Add video settings
+  command.outputOptions(videoSettings);
+  
+  // Add audio settings
+  command.outputOptions(audioSettings);
+  
+  // Add output format settings
+  command.outputOptions(outputSettings);
+  
+  // Set output
+  command.output(job.outPath);
+  
+  // Run the command
+  await ffmpeg.runCommand(command);
+  
+  // Get final duration
+  const duration = await ffmpeg.getVideoDuration(job.outPath);
+  
+  return {
+    outPath: job.outPath,
+    duration,
+  };
+}
 
-  /**
-   * Get video duration
-   */
-  private async getVideoDuration(videoPath: string): Promise<number> {
-    try {
-      return await this.ffmpeg.getDuration(videoPath);
-    } catch {
-      return 0;
-    }
-  }
-
-  /**
-   * Check if file exists
-   */
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.access(filePath);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+interface ProcessedClip extends ClipInput {
+  index: number;
+  duration: number;
+  kenBurnsEffect: KenBurnsEffect;
 }

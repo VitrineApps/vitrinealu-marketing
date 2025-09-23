@@ -1,23 +1,14 @@
 declare module 'fluent-ffmpeg' {
   interface FfmpegCommand {
-    input(input: string): FfmpegCommand;
-    inputOptions(options: string[]): FfmpegCommand;
-    outputOptions(options: string[]): FfmpegCommand;
-    complexFilter(filters: string | string[]): FfmpegCommand;
-    output(output: string): FfmpegCommand;
-    duration(duration: number): FfmpegCommand;
-    size(size: string): FfmpegCommand;
-    fps(fps: number): FfmpegCommand;
-    format(format: string): FfmpegCommand;
+    input(source: string): FfmpegCommand;
+    output(destination: string): FfmpegCommand;
     videoCodec(codec: string): FfmpegCommand;
     audioCodec(codec: string): FfmpegCommand;
+    size(size: string): FfmpegCommand;
+    fps(fps: number): FfmpegCommand;
     videoBitrate(bitrate: string): FfmpegCommand;
     audioBitrate(bitrate: string): FfmpegCommand;
     audioChannels(channels: number): FfmpegCommand;
-    audioFrequency(frequency: number): FfmpegCommand;
-    videoFilters(filters: string | string[]): FfmpegCommand;
-    map(stream: string): FfmpegCommand;
-    concat(count: number): FfmpegCommand;
     on(event: string, callback: (...args: unknown[]) => void): FfmpegCommand;
     run(): void;
   }

@@ -25,7 +25,15 @@ program
   .option('-f, --fps <fps>', 'Frames per second', '30')
   .option('-r, --bitrate <bitrate>', 'Video bitrate (e.g., 2000k)', '2000k')
   .option('--ffmpeg <ffmpegPath>', 'Path to ffmpeg executable')
-  .action(async (inputDir: string, outputPath: string, options: unknown) => {
+  .action(async (inputDir: string, outputPath: string, options: {
+    profile?: string;
+    brand?: string;
+    watermark?: boolean;
+    music?: string;
+    fps?: string;
+    bitrate?: string;
+    ffmpeg?: string;
+  }) => {
     try {
       logger.info({ msg: 'Starting video assembly', inputDir, outputPath, options });
 
@@ -38,7 +46,7 @@ program
         brandKit: options.brand ? path.resolve(options.brand) : undefined,
         watermark: options.watermark,
         music: options.music ? path.resolve(options.music) : undefined,
-        fps: parseInt(options.fps),
+        fps: parseInt(options.fps || '30'),
         bitrate: options.bitrate,
       });
 

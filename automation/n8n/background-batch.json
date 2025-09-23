@@ -1,0 +1,382 @@
+{
+  "name": "Background Batch Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Weekly Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://localhost:8080/api/media/curated",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "list-curated-media",
+      "name": "List Curated Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "batch-media",
+      "name": "Batch Media Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8089/background/replace",
+        "sendBody": true,
+        "specifyBody": "multipart-form-data",
+        "multipartBody": {
+          "values": [
+            {
+              "name": "file",
+              "value": "={{ $json.imagePath }}",
+              "type": "file"
+            },
+            {
+              "name": "prompt",
+              "value": "modern minimalist studio with soft diffused lighting, neutral gray backdrop, clean minimal setup, professional product photography"
+            },
+            {
+              "name": "negative_prompt",
+              "value": "people, faces, text, watermark, cluttered, busy, dark, harsh shadows, oversaturated"
+            },
+            {
+              "name": "steps",
+              "value": "25"
+            },
+            {
+              "name": "guidance_scale",
+              "value": "7.5"
+            },
+            {
+              "name": "engine",
+              "value": "SDXL"
+            },
+            {
+              "name": "enhance_fg",
+              "value": "true"
+            },
+            {
+              "name": "match_colors",
+              "value": "true"
+            },
+            {
+              "name": "feather_edges",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "background-replace",
+      "name": "Background Replace",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "success-condition",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-success",
+      "name": "Check Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:8080/api/media/{{ $('batch-media').item.json.id }}/update",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"backgroundProcessing\": {\n    \"status\": \"completed\",\n    \"outputPath\": \"{{ $json.output_path }}\",\n    \"processedAt\": \"{{ new Date().toISOString() }}\",\n    \"engine\": \"SDXL\",\n    \"prompt\": \"modern minimalist studio with soft diffused lighting\"\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "update-media-record",
+      "name": "Update Media Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1340,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:8080/api/media/{{ $('batch-media').item.json.id }}/error",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"backgroundProcessing\": {\n    \"status\": \"failed\",\n    \"error\": \"{{ $json.error || $json.message || 'Unknown error' }}\",\n    \"processedAt\": \"{{ new Date().toISOString() }}\"\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "log-error",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1340,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log batch completion\nconst batchInfo = $('batch-media').all();\nconst currentBatch = $input.all();\n\nconsole.log(`Processed batch of ${currentBatch.length} items`);\nconsole.log(`Batch ${batchInfo[0].json.batchIndex + 1} of ${batchInfo[0].json.batchCount}`);\n\n// Return summary data\nreturn [{\n  json: {\n    batchIndex: batchInfo[0].json.batchIndex,\n    batchCount: batchInfo[0].json.batchCount,\n    itemsProcessed: currentBatch.length,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "batch-summary",
+      "name": "Batch Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/workflows/background-batch/log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"workflowId\": \"{{ $workflow.id }}\",\n  \"executionId\": \"{{ $execution.id }}\",\n  \"status\": \"batch_completed\",\n  \"batchIndex\": {{ $json.batchIndex }},\n  \"batchCount\": {{ $json.batchCount }},\n  \"itemsProcessed\": {{ $json.itemsProcessed }},\n  \"timestamp\": \"{{ $json.timestamp }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "log-batch-completion",
+      "name": "Log Batch Completion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final workflow summary\nconst allBatches = $('batch-summary').all();\nconst totalItems = allBatches.reduce((sum, batch) => sum + batch.json.itemsProcessed, 0);\n\nconsole.log(`Background processing workflow completed`);\nconsole.log(`Total items processed: ${totalItems}`);\nconsole.log(`Total batches: ${allBatches.length}`);\n\nreturn [{\n  json: {\n    workflowStatus: 'completed',\n    totalItems: totalItems,\n    totalBatches: allBatches.length,\n    completedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "workflow-summary",
+      "name": "Workflow Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        300
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Weekly Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Curated Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Curated Media": {
+      "main": [
+        [
+          {
+            "node": "Batch Media Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Media Items": {
+      "main": [
+        [
+          {
+            "node": "Background Replace",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Background Replace": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "Update Media Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Media Record": {
+      "main": [
+        [
+          {
+            "node": "Batch Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Batch Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Summary": {
+      "main": [
+        [
+          {
+            "node": "Log Batch Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Batch Completion": {
+      "main": [
+        [
+          {
+            "node": "Workflow Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "background-batch-workflow"
+  },
+  "id": "background-batch",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "media-automation",
+      "name": "Media Automation"
+    }
+  ]
+}

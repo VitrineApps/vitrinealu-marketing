@@ -36,6 +36,12 @@ class MediaIngestConfig(BaseSettings):
     # Feature toggles
     face_blur_enabled: bool = Field(True, description="Enable face blurring")
     enhancement_enabled: bool = Field(True, description="Enable image enhancement")
+    
+        # Background automation settings
+        background_automation: Optional[str] = Field(None, description="Background automation mode: 'cleanup', 'replace', or None")
+        background_api_url: str = Field("http://localhost:8089", description="Background service API URL")
+        background_preset: str = Field("vitrinealu", description="Brand preset for background replacement")
+        background_prompt_type: str = Field("studio", description="Prompt type: garden, studio, minimal, lifestyle")
 
     # Enhancement settings
     enhancement_backend: str = Field("realesrgan", description="Enhancement backend: realesrgan, gfpgan, or pil")
