@@ -1,5 +1,5 @@
-import pino from 'pino';
-export const logger = pino({
+import * as pino from 'pino';
+export const logger = pino.pino({
   level: process.env.LOG_LEVEL ?? 'info',
   redact: { paths: ['req.headers.authorization','OPENAI_API_KEY','GEMINI_API_KEY'], remove: true },
 });

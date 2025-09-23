@@ -1,0 +1,551 @@
+{
+  "name": "VitrineAlu Main Automation Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "webhook",
+        "webhookId": "vitrinealu-new-asset",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-new-asset",
+      "name": "New Asset Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "vitrinealu-new-asset"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute",
+              "minute": 15
+            }
+          ]
+        }
+      },
+      "id": "drive-watcher",
+      "name": "Google Drive Watcher",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 500]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "list",
+        "driveId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_READY_PARENT_ID }}",
+          "mode": "id"
+        },
+        "options": {
+          "query": "name contains '.jpg' or name contains '.jpeg' or name contains '.png'"
+        }
+      },
+      "id": "list-drive-files",
+      "name": "List New Drive Files",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [460, 500],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google-drive-oauth",
+          "name": "Google Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.mimeType }}",
+              "operation": "contains",
+              "value2": "image/"
+            }
+          ]
+        }
+      },
+      "id": "filter-images",
+      "name": "Filter Images Only",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/hash",
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"driveFileId\": \"{{ $json.id }}\", \"fileName\": \"{{ $json.name }}\" }"
+      },
+      "id": "compute-hash",
+      "name": "Compute File Hash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/score",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"driveFileId\": \"{{ $json.id }}\", \"hash\": \"{{ $('Compute File Hash').item.json.hash }}\" }"
+      },
+      "id": "aesthetic-score",
+      "name": "Aesthetic Score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.score }}",
+              "operation": "largerEqual",
+              "value2": "={{ $env.AESTHETIC_THRESHOLD || 0.62 }}"
+            }
+          ]
+        }
+      },
+      "id": "quality-gate",
+      "name": "Quality Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/enhance",
+        "options": {
+          "timeout": 180000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"driveFileId\": \"{{ $json.id }}\", \"hash\": \"{{ $('Compute File Hash').item.json.hash }}\", \"enhance\": true, \"watermark\": true, \"blurFaces\": true }"
+      },
+      "id": "enhance-image",
+      "name": "Enhance Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/background/cleanup",
+        "options": {
+          "timeout": 120000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"inputPath\": \"{{ $('Enhance Image').item.json.outputPath }}\", \"mode\": \"{{ $env.BACKGROUND_MODE || 'clean' }}\" }"
+      },
+      "id": "background-process",
+      "name": "Background Processing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/video/reel",
+        "options": {
+          "timeout": 300000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"imagePath\": \"{{ $('Background Processing').item.json.outputPath }}\", \"format\": \"vertical\", \"duration\": 20, \"brand\": true }"
+      },
+      "id": "create-vertical-video",
+      "name": "Create Vertical Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/video/linkedin",
+        "options": {
+          "timeout": 300000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"imagePath\": \"{{ $('Background Processing').item.json.outputPath }}\", \"format\": \"horizontal\", \"duration\": 45, \"brand\": true }"
+      },
+      "id": "create-linkedin-video",
+      "name": "Create LinkedIn Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/caption",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"imagePath\": \"{{ $('Background Processing').item.json.outputPath }}\", \"platform\": \"instagram\", \"tone\": \"lifestyle, premium, warm, concise\" }"
+      },
+      "id": "caption-instagram",
+      "name": "Caption for Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/caption",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"imagePath\": \"{{ $('Background Processing').item.json.outputPath }}\", \"platform\": \"tiktok\", \"tone\": \"energetic, punchy, hook-first\" }"
+      },
+      "id": "caption-tiktok",
+      "name": "Caption for TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/caption",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"imagePath\": \"{{ $('Background Processing').item.json.outputPath }}\", \"platform\": \"linkedin\", \"tone\": \"professional, spec-led, value-focused\" }"
+      },
+      "id": "caption-linkedin",
+      "name": "Caption for LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/schedule/buffer",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"posts\": [\n    {\n      \"platform\": \"instagram_reel\",\n      \"mediaPath\": \"{{ $('Create Vertical Video').item.json.outputPath }}\",\n      \"caption\": \"{{ $('Caption for Instagram').item.json.caption }}\",\n      \"hashtags\": {{ $('Caption for Instagram').item.json.hashtags }},\n      \"scheduleSlot\": \"mon_reel\"\n    },\n    {\n      \"platform\": \"tiktok\",\n      \"mediaPath\": \"{{ $('Create Vertical Video').item.json.outputPath }}\",\n      \"caption\": \"{{ $('Caption for TikTok').item.json.caption }}\",\n      \"hashtags\": {{ $('Caption for TikTok').item.json.hashtags }},\n      \"scheduleSlot\": \"fri_reel\"\n    },\n    {\n      \"platform\": \"linkedin_company\",\n      \"mediaPath\": \"{{ $('Create LinkedIn Video').item.json.outputPath }}\",\n      \"caption\": \"{{ $('Caption for LinkedIn').item.json.caption }}\",\n      \"hashtags\": {{ $('Caption for LinkedIn').item.json.hashtags }},\n      \"scheduleSlot\": \"thu_linkedin\"\n    }\n  ],\n  \"assetId\": \"{{ $('Compute File Hash').item.json.hash }}\"\n}"
+      },
+      "id": "create-buffer-drafts",
+      "name": "Create Buffer Drafts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2440, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.success }}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "success-check",
+      "name": "Success Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/notify/success",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"assetId\": \"{{ $('Compute File Hash').item.json.hash }}\",\n  \"fileName\": \"{{ $('New Asset Webhook').item.json.name || $('List New Drive Files').item.json.name }}\",\n  \"postsCreated\": {{ $('Create Buffer Drafts').item.json.postsCreated || 0 }},\n  \"timestamp\": \"{{ new Date().toISOString() }}\"\n}"
+      },
+      "id": "notify-success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2880, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.score }}",
+              "operation": "smaller",
+              "value2": "={{ $env.AESTHETIC_THRESHOLD || 0.62 }}"
+            }
+          ]
+        }
+      },
+      "id": "quality-fail",
+      "name": "Quality Threshold Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1340, 600]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/notify/quality-fail",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"assetId\": \"{{ $('Compute File Hash').item.json.hash }}\",\n  \"fileName\": \"{{ $('New Asset Webhook').item.json.name || $('List New Drive Files').item.json.name }}\",\n  \"score\": {{ $('Aesthetic Score').item.json.score }},\n  \"threshold\": {{ $env.AESTHETIC_THRESHOLD || 0.62 }},\n  \"timestamp\": \"{{ new Date().toISOString() }}\"\n}"
+      },
+      "id": "notify-quality-fail",
+      "name": "Notify Quality Fail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 600]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "New Asset Webhook": {
+      "main": [
+        [
+          {
+            "node": "Filter Images Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive Watcher": {
+      "main": [
+        [
+          {
+            "node": "List New Drive Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List New Drive Files": {
+      "main": [
+        [
+          {
+            "node": "Filter Images Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Images Only": {
+      "main": [
+        [
+          {
+            "node": "Compute File Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute File Hash": {
+      "main": [
+        [
+          {
+            "node": "Aesthetic Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aesthetic Score": {
+      "main": [
+        [
+          {
+            "node": "Quality Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality Gate": {
+      "main": [
+        [
+          {
+            "node": "Enhance Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quality Threshold Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhance Image": {
+      "main": [
+        [
+          {
+            "node": "Background Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Background Processing": {
+      "main": [
+        [
+          {
+            "node": "Create Vertical Video",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create LinkedIn Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Vertical Video": {
+      "main": [
+        [
+          {
+            "node": "Caption for Instagram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Caption for TikTok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create LinkedIn Video": {
+      "main": [
+        [
+          {
+            "node": "Caption for LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caption for Instagram": {
+      "main": [
+        [
+          {
+            "node": "Create Buffer Drafts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caption for TikTok": {
+      "main": [
+        [
+          {
+            "node": "Create Buffer Drafts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caption for LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Create Buffer Drafts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Buffer Drafts": {
+      "main": [
+        [
+          {
+            "node": "Success Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success Check": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality Threshold Failed": {
+      "main": [
+        [
+          {
+            "node": "Notify Quality Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "main-automation-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "vitrinealu-main-automation"
+  },
+  "id": "main-automation-pipeline",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "automation",
+      "name": "automation"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z", 
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "vitrinealu",
+      "name": "vitrinealu"
+    }
+  ]
+}

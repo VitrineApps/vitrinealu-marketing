@@ -1,0 +1,234 @@
+{
+  "name": "Weekly Digest & Approval",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 6"
+            }
+          ]
+        }
+      },
+      "id": "weekly-cron",
+      "name": "Weekly Trigger (Sat 10:00)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/digest/pending",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "get-pending-posts",
+      "name": "Get Pending Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.posts.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-has-posts",
+      "name": "Check Has Posts",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/digest/generate",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"posts\": {{ $json.posts }}, \"weekStart\": \"{{ new Date().toISOString().split('T')[0] }}\" }"
+      },
+      "id": "generate-digest",
+      "name": "Generate Digest HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $env.APPROVAL_EMAIL }}",
+        "subject": "VitrineAlu Weekly Content Approval - {{ new Date().toLocaleDateString() }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "send-digest-email",
+      "name": "Send Digest Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-config",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/digest/log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"digestId\": \"{{ $json.digestId }}\",\n  \"postsCount\": {{ $('Get Pending Posts').item.json.posts.length }},\n  \"sentAt\": \"{{ new Date().toISOString() }}\",\n  \"recipient\": \"{{ $env.APPROVAL_EMAIL }}\"\n}"
+      },
+      "id": "log-digest-sent",
+      "name": "Log Digest Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.posts.length }}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "no-posts-branch",
+      "name": "No Posts This Week",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/digest/log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"digestId\": null,\n  \"postsCount\": 0,\n  \"sentAt\": \"{{ new Date().toISOString() }}\",\n  \"message\": \"No pending posts for approval\"\n}"
+      },
+      "id": "log-no-posts",
+      "name": "Log No Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 500]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Weekly Trigger (Sat 10:00)": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pending Posts": {
+      "main": [
+        [
+          {
+            "node": "Check Has Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Has Posts": {
+      "main": [
+        [
+          {
+            "node": "Generate Digest HTML",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Posts This Week",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Digest HTML": {
+      "main": [
+        [
+          {
+            "node": "Send Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Digest Email": {
+      "main": [
+        [
+          {
+            "node": "Log Digest Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Posts This Week": {
+      "main": [
+        [
+          {
+            "node": "Log No Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "weekly-digest-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "vitrinealu-weekly-digest"
+  },
+  "id": "weekly-digest-approval",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "approval",
+      "name": "approval"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "digest",
+      "name": "digest"
+    }
+  ]
+}

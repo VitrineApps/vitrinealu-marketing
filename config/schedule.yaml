@@ -1,0 +1,31 @@
+timezone: "Europe/London"
+slots:
+  - id: mon_reel
+    day: "Mon"
+    time: "18:00"
+    platforms: ["instagram_reel","tiktok","youtube_short","facebook_reel"]
+    format: "vertical"
+    duration_s: 20
+  - id: tue_carousel
+    day: "Tue"
+    time: "12:00"
+    platforms: ["instagram","facebook"]
+    format: "carousel"
+    images: 3
+  - id: thu_linkedin
+    day: "Thu"
+    time: "09:30"
+    platforms: ["linkedin_company"]
+    format: "horizontal"
+    duration_s: 45
+  - id: fri_reel
+    day: "Fri"
+    time: "16:00"
+    platforms: ["tiktok","instagram_reel","youtube_short"]
+    format: "vertical"
+    duration_s: 15
+limits:
+  hashtags:
+    instagram: 5
+    tiktok: 5
+    linkedin: 3

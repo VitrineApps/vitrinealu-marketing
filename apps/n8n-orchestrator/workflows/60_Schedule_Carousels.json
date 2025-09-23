@@ -219,7 +219,7 @@
       },
       "staticData": null,
       "meta": {
-        "notes": "Weekly workflow to schedule carousel posts based on the configured schedule.yml. Runs every Monday at 9 AM UTC."
+        "notes": "Weekly workflow to schedule carousel posts based on the configured schedule.yaml. Runs every Monday at 9 AM UTC."
       }
     }
   ]

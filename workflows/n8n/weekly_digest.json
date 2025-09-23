@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "version": 1,
+    "description": "Generate weekly digest email and send approval summary."
+  },
+  "workflow": {
+    "name": "weekly_digest",
+    "active": false,
+    "nodes": [
+      {
+        "id": "cron",
+        "name": "Saturday Digest Trigger",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [0, 0],
+        "parameters": {
+          "triggerTimes": {
+            "item": [
+              {
+                "days": {
+                  "item": [
+                    {
+                      "item": ["Saturday"]
+                    }
+                  ]
+                },
+                "hour": 10,
+                "minute": 0
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "collect-posts",
+        "name": "Fetch Pending Posts",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [220, 0],
+        "parameters": {
+          "method": "GET",
+          "url": "http://scheduler:8080/api/posts/pending"
+        }
+      },
+      {
+        "id": "build-digest",
+        "name": "Build Digest",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [450, 0],
+        "parameters": {
+          "method": "POST",
+          "url": "http://scheduler:8080/api/digest",
+          "jsonParameters": true,
+          "bodyParametersJson": "={\n  \"posts\": \n}"
+        }
+      },
+      {
+        "id": "send-email",
+        "name": "Send Digest Email",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [680, 0],
+        "parameters": {
+          "method": "POST",
+          "url": "http://scheduler:8080/api/notify/digest",
+          "jsonParameters": true,
+          "bodyParametersJson": "={{JSON.stringify()}}"
+        }
+      }
+    ],
+    "connections": {
+      "cron": {
+        "main": [[{"node": "Fetch Pending Posts", "type": "main", "index": 0}]]
+      },
+      "collect-posts": {
+        "main": [[{"node": "Build Digest", "type": "main", "index": 0}]]
+      },
+      "build-digest": {
+        "main": [[{"node": "Send Digest Email", "type": "main", "index": 0}]]
+      }
+    }
+  }
+}

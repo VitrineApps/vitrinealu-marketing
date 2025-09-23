@@ -8,7 +8,7 @@ This checklist covers comprehensive testing of the carousel content management a
 - [ ] Database is populated with test data
 - [ ] Sample media fixtures are available (`fixtures/media/projects/`)
 - [ ] Brand configuration is valid (`config/brand.yaml`)
-- [ ] Schedule configuration is valid (`config/schedule.yml`)
+- [ ] Schedule configuration is valid (`config/schedule.yaml`)
 - [ ] Test user with editor role exists
 
 ## Unit Tests

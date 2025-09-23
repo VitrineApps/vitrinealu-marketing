@@ -90,7 +90,7 @@ export class CronScheduler {
         logger.info('Running publish approved job');
 
         // Get approved posts that are scheduled for publishing
-        const approvedPosts = this.repository.getPostsByStatus('approved', 10); // Limit to 10 at a time
+        const approvedPosts = this.repository.listPostsByStatus('approved', 10); // Limit to 10 at a time
 
         if (approvedPosts.length === 0) {
           return;
@@ -176,7 +176,7 @@ export class CronScheduler {
   async triggerPublish(): Promise<void> {
     logger.info('Manually triggering publish job');
 
-    const approvedPosts = this.repository.getPostsByStatus('approved', 10);
+    const approvedPosts = this.repository.listPostsByStatus('approved', 10);
     let publishedCount = 0;
 
     for (const post of approvedPosts) {

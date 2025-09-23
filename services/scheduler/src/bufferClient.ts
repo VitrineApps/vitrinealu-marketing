@@ -135,3 +135,39 @@ export async function createCarouselDraft(input: CarouselDraftInput): Promise<Ca
     },
   });
 }
+
+async function authorizedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const baseUrl = (process.env.BUFFER_BASE_URL || config.config.BUFFER_BASE_URL || 'https://api.buffer.com/2/').replace(/\/$/, '');
+  const accessToken = process.env.BUFFER_ACCESS_TOKEN || config.config.BUFFER_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new ValidationError('Missing BUFFER_ACCESS_TOKEN');
+  }
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    ...(init.headers || {}),
+  } as Record<string, string>;
+  const response = await fetch(`${baseUrl}${url}`, { ...init, headers });
+  return response;
+}
+
+export class BufferClient {
+  async createCarouselDraft(input: CarouselDraftInput): Promise<CarouselDraftResult> {
+    return createCarouselDraft(input);
+  }
+
+  async scheduleDraft(updateId: string): Promise<void> {
+    await this.postUpdateAction(updateId, 'share');
+  }
+
+  async deleteDraft(updateId: string): Promise<void> {
+    await this.postUpdateAction(updateId, 'destroy');
+  }
+
+  private async postUpdateAction(updateId: string, action: 'share' | 'destroy'): Promise<void> {
+    const response = await authorizedFetch(`/updates/${updateId}/${action}.json`, { method: 'POST' });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new ApiError(`Buffer ${action} failed: ${body}`, response.status);
+    }
+  }
+}

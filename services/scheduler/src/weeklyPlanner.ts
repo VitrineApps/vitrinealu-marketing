@@ -95,7 +95,7 @@ export class WeeklyPlanner {
   constructor(
     planningService: PlanningService,
     repository: Repository,
-    scheduleConfigPath: string = './config/schedule.yml'
+    scheduleConfigPath: string = './config/schedule.yaml'
   ) {
     this.planningService = planningService;
     this.repository = repository;

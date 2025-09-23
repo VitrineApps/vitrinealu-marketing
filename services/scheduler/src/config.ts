@@ -26,10 +26,12 @@ const envSchema = z.object({
 
   // Webhook configuration
   WEBHOOK_SECRET: z.string().min(32, 'WEBHOOK_SECRET must be at least 32 characters'),
+  APPROVAL_HMAC_SECRET: z.string().min(32, 'APPROVAL_HMAC_SECRET must be at least 32 characters'),
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000,https://vitrinealu.com'),
 
   // Application
   APP_BASE_URL: z.string().url('APP_BASE_URL must be a valid URL'),
+  PUBLIC_BASE_URL: z.string().url('PUBLIC_BASE_URL must be a valid URL'),
   OWNER_EMAIL: z.string().email('OWNER_EMAIL must be a valid email'),
 
   // Database
@@ -105,6 +107,45 @@ class ConfigManager {
   getWebhookUrl(postId: string, action: 'approve' | 'reject'): string {
     const token = this.generateWebhookToken(postId, action);
     return `${this._config.APP_BASE_URL}/webhooks/approval?token=${token}&postId=${postId}&action=${action}`;
+  }
+
+  // Build signed approval link for external callbacks
+  getApprovalLink(postId: string, action: 'approve' | 'reject', assetId?: string, timestamp?: string): string {
+    const ts = timestamp ?? Date.now().toString();
+    const signature = this.signApprovalPayload({ postId, action, assetId, timestamp: ts });
+    const url = new URL(this._config.PUBLIC_BASE_URL);
+    url.pathname = `/webhooks/${action}`;
+    url.searchParams.set('postId', postId);
+    if (assetId) {
+      url.searchParams.set('assetId', assetId);
+    }
+    url.searchParams.set('ts', ts);
+    url.searchParams.set('signature', signature);
+    return url.toString();
+  }
+
+  signApprovalPayload(data: { postId: string; action: string; assetId?: string; timestamp: string }): string {
+    const payload = [data.postId, data.action, data.assetId ?? '', data.timestamp].join(':');
+    const hmac = crypto.createHmac('sha256', this._config.APPROVAL_HMAC_SECRET);
+    hmac.update(payload);
+    return hmac.digest('hex');
+  }
+
+  verifyApprovalPayload(data: { postId: string; action: string; assetId?: string; timestamp: string; signature: string; maxAgeMs?: number }): boolean {
+    try {
+      const expected = this.signApprovalPayload(data);
+      const provided = data.signature;
+      if (!provided || expected.length !== provided.length) {
+        return false;
+      }
+      const age = Date.now() - Number(data.timestamp);
+      if (data.maxAgeMs && age > data.maxAgeMs) {
+        return false;
+      }
+      return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(provided, 'hex'));
+    } catch {
+      return false;
+    }
   }
 
   // Generate HMAC token for webhook security

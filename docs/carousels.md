@@ -28,7 +28,7 @@ The carousel system enables automated creation and scheduling of multi-image pos
 
 ## Configuration
 
-### Schedule Configuration (`config/schedule.yml`)
+### Schedule Configuration (`config/schedule.yaml`)
 
 The carousel system uses YAML-based configuration for scheduling rules and platform constraints.
 

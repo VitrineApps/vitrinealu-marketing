@@ -1,31 +1,18 @@
-brand: vitrinealu
-tagline: "Bring light into living"
-colors:
-  primary: "#111827"
-  secondary: "#FBBF24"
-  accent: "#0EA5E9"
-  text_light: "#FFFFFF"
-  text_dark: "#111827"
-fonts:
-  primary: "Montserrat"
-  secondary: "Lato"
-watermark:
-  path: "assets/brand/watermark.png"
-  opacity: 0.85
-  margin_px: 48
-aspect_ratios:
-  reels: "9:16"
-  square: "1:1"
-  landscape: "16:9"
-safe_areas:
-  reels: { top: 220, bottom: 220, left: 40, right: 40 }
-tone:
-  - inspiring
-  - authentic
-  - premium
-  - elegant
-locale: en-GB
-bannedHashtags:
-  - "#ugly"
-  - "#cheap"
-  - "#lowquality"
+brand:
+  name: VitrineAlu
+  tagline: "Bring light into living"
+  colors:
+    primary: "#0C2436"
+    accent:  "#1274B7"
+    light:   "#F5F7FA"
+    white:   "#FFFFFF"
+  fonts:
+    heading: "Poppins-SemiBold"
+    body:    "Inter-Regular"
+  watermark:
+    file: "/assets/brand/logo-white.png"
+    opacity: 0.7
+    position: "bottom-right"
+    margin_px: 32
+text_overlay:
+  safe_area_pct: { top: 12, bottom: 18, sides: 8 }

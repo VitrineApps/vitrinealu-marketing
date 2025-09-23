@@ -24,7 +24,7 @@ describe('WeeklyPlanner', () => {
 
   beforeEach(() => {
     // Mock path resolution
-    mockPath.resolve.mockReturnValue('/mock/config/schedule.yml');
+    mockPath.resolve.mockReturnValue('/mock/config/schedule.yaml');
 
     // Mock file reading
     mockScheduleConfig = {
@@ -125,8 +125,8 @@ describe('WeeklyPlanner', () => {
     it('should load schedule configuration from YAML file', () => {
       const config = weeklyPlanner.getScheduleConfig();
       expect(config).toEqual(mockScheduleConfig);
-      expect(mockPath.resolve).toHaveBeenCalledWith('./config/schedule.yml');
-      expect(mockFs.readFileSync).toHaveBeenCalledWith('/mock/config/schedule.yml', 'utf-8');
+      expect(mockPath.resolve).toHaveBeenCalledWith('./config/schedule.yaml');
+      expect(mockFs.readFileSync).toHaveBeenCalledWith('/mock/config/schedule.yaml', 'utf-8');
     });
 
     it('should validate configuration correctly', () => {

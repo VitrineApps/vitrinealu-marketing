@@ -1,0 +1,103 @@
+{
+  "meta": {
+    "version": 1,
+    "description": "Ingest new assets, enhance, generate video, caption, upload, and create Buffer drafts."
+  },
+  "workflow": {
+    "name": "auto_pipeline",
+    "active": false,
+    "nodes": [
+      {
+        "id": "trigger",
+        "name": "Drive & Local Watch",
+        "type": "n8n-nodes-base.start",
+        "typeVersion": 1,
+        "position": [0, 0],
+        "parameters": {
+          "note": "Replace with Google Drive trigger and local folder polling."}
+      },
+      {
+        "id": "list-assets",
+        "name": "List Incoming Assets",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [200, 0],
+        "parameters": {
+          "functionCode": "// TODO: implement asset listing via Google Drive + local fs\nreturn items;"
+        }
+      },
+      {
+        "id": "enhance",
+        "name": "Enhance Asset",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [400, 0],
+        "parameters": {
+          "method": "POST",
+          "url": "http://enhance:8000/enhance",
+          "jsonParameters": true,
+          "options": {
+            "timeout": 60000
+          },
+          "bodyParametersJson": "{\n  \"inputUrl\": \"={{[\"inputUrl\"]}}\",\n  \"preset\": \"enhance_cinematic\"\n}"
+        }
+      },
+      {
+        "id": "video",
+        "name": "Generate Video",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [600, 0],
+        "parameters": {
+          "method": "POST",
+          "url": "http://video:8080/video/generate",
+          "jsonParameters": true,
+          "bodyParametersJson": "{\n  \"assetId\": \"={{[\"assetId\"]}}\",\n  \"aspect\": \"vertical\",\n  \"duration\": 20\n}"
+        }
+      },
+      {
+        "id": "caption",
+        "name": "Create Caption",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [800, 0],
+        "parameters": {
+          "method": "POST",
+          "url": "http://scheduler:8080/api/caption",
+          "jsonParameters": true,
+          "bodyParametersJson": "{\n  \"assetId\": \"={{[\"assetId\"]}}\",\n  \"platforms\": [\"instagram\", \"tiktok\", \"linkedin\"]\n}"
+        }
+      },
+      {
+        "id": "buffer",
+        "name": "Create Buffer Draft",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [1000, 0],
+        "parameters": {
+          "method": "POST",
+          "url": "http://scheduler:8080/api/drafts",
+          "jsonParameters": true,
+          "bodyParametersJson": "={{JSON.stringify()}}"
+        }
+      }
+    ],
+    "connections": {
+      "trigger": {
+        "main": [[{"node": "List Incoming Assets", "type": "main", "index": 0}]]
+      },
+      "list-assets": {
+        "main": [[{"node": "Enhance Asset", "type": "main", "index": 0}]]
+      },
+      "enhance": {
+        "main": [[{"node": "Generate Video", "type": "main", "index": 0}]]
+      },
+      "video": {
+        "main": [[{"node": "Create Caption", "type": "main", "index": 0}]]
+      },
+      "caption": {
+        "main": [[{"node": "Create Buffer Draft", "type": "main", "index": 0}]]
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { verifyJWT, JWTPayload, getEnv, logger } from '@vitrinealu/shared';
-import { createAdapterFactoryFromEnv, AdapterFactory } from '@vitrinealu/video-assembler';
+import { createAdapterFactoryFromEnv, AdapterFactory, AssembleJob } from '@vitrinealu/video-assembler';
 
 // Extend Express Request to include user
 declare global {
@@ -88,11 +88,18 @@ router.post('/generate', authenticateEditor, async (req, res) => {
     }
 
     // Create assemble job from request
-    const assembleJob = {
-      profile: request.profile,
-      clips: request.clips,
+    const assembleJob: AssembleJob = {
+      profile: request.profile === 'reel' ? 'reel' : 'linkedin', // Map API profiles to assembler profiles
+      clips: request.clips.map(clip => ({
+        image: clip.image,
+        durationSec: clip.durationSec,
+        pan: clip.pan === 'leftToRight' ? 'ltr' : 
+             clip.pan === 'rightToLeft' ? 'rtl' : 'center',
+        zoom: clip.zoom || 'none',
+      })),
       outPath: `/tmp/video_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`,
       seed: request.seed || Math.floor(Math.random() * 10000),
+      adapter: request.adapter,
     };
 
     // Generate video using adapter system
@@ -106,23 +113,22 @@ router.post('/generate', authenticateEditor, async (req, res) => {
 
     const result = await adapterFactory.generateVideo(
       assembleJob,
-      request.adapter,
-      request.enableFallback
+      request.adapter
     );
 
     logger.info({
       msg: 'Video generation completed',
-      adapter: result.adapter,
-      duration: result.duration,
-      outputPath: result.outPath
+      adapter: result.metadata.adapter,
+      duration: result.metadata.duration,
+      outputPath: result.outputPath
     });
 
     res.json({
       success: true,
       video: {
-        adapter: result.adapter,
-        outputPath: result.outPath,
-        duration: result.duration,
+        adapter: result.metadata.adapter,
+        outputPath: result.outputPath,
+        duration: result.metadata.duration,
         profile: request.profile,
         clipCount: request.clips.length,
       },
@@ -140,11 +146,12 @@ router.post('/generate', authenticateEditor, async (req, res) => {
     logger.error({ err: error }, 'Video generation failed');
     
     // Handle adapter-specific errors
-    if (error.message?.includes('API key')) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage?.includes('API key')) {
       return res.status(500).json({ error: 'Video service configuration error' });
     }
     
-    if (error.message?.includes('quota') || error.message?.includes('limit')) {
+    if (errorMessage?.includes('quota') || errorMessage?.includes('limit')) {
       return res.status(429).json({ error: 'Video generation quota exceeded' });
     }
 

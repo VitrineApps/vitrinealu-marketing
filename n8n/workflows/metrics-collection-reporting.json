@@ -1,0 +1,291 @@
+{
+  "name": "Metrics Collection & Reporting",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression", 
+              "expression": "0 6 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "sunday-metrics-cron",
+      "name": "Sunday Metrics Collection (6:00)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/metrics/published-posts",
+        "options": {
+          "timeout": 30000,
+          "qs": {
+            "days": 7
+          }
+        }
+      },
+      "id": "get-published-posts",
+      "name": "Get Published Posts (Last 7 Days)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.posts.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-has-published",
+      "name": "Check Has Published Posts",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/metrics/collect",
+        "options": {
+          "timeout": 120000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"posts\": {{ $json.posts }} }"
+      },
+      "id": "collect-metrics",
+      "name": "Collect Platform Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/metrics/analyze",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"metrics\": {{ $json.metrics }} }"
+      },
+      "id": "analyze-performance",
+      "name": "Analyze Performance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/metrics/report",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"analysis\": {{ $json.analysis }}, \"weekEnd\": \"{{ new Date().toISOString().split('T')[0] }}\" }"
+      },
+      "id": "generate-report",
+      "name": "Generate Weekly Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $env.METRICS_EMAIL || $env.APPROVAL_EMAIL }}",
+        "subject": "VitrineAlu Weekly Performance Report - {{ new Date().toLocaleDateString() }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "send-report-email",
+      "name": "Send Performance Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1560, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-config",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/metrics/log-report",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"reportId\": \"{{ $json.reportId }}\",\n  \"metricsCollected\": {{ $('Collect Platform Metrics').item.json.collected || 0 }},\n  \"sentAt\": \"{{ new Date().toISOString() }}\",\n  \"recipient\": \"{{ $env.METRICS_EMAIL || $env.APPROVAL_EMAIL }}\"\n}"
+      },
+      "id": "log-report-sent",
+      "name": "Log Report Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.posts.length }}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "no-published-posts",
+      "name": "No Published Posts",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WORKER_API_URL }}/metrics/log-report",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"reportId\": null,\n  \"metricsCollected\": 0,\n  \"sentAt\": \"{{ new Date().toISOString() }}\",\n  \"message\": \"No published posts to analyze this week\"\n}"
+      },
+      "id": "log-no-metrics",
+      "name": "Log No Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 500]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Sunday Metrics Collection (6:00)": {
+      "main": [
+        [
+          {
+            "node": "Get Published Posts (Last 7 Days)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Published Posts (Last 7 Days)": {
+      "main": [
+        [
+          {
+            "node": "Check Has Published Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Has Published Posts": {
+      "main": [
+        [
+          {
+            "node": "Collect Platform Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Published Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Platform Metrics": {
+      "main": [
+        [
+          {
+            "node": "Analyze Performance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Performance": {
+      "main": [
+        [
+          {
+            "node": "Generate Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Send Performance Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Performance Report": {
+      "main": [
+        [
+          {
+            "node": "Log Report Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Published Posts": {
+      "main": [
+        [
+          {
+            "node": "Log No Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "metrics-collection-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "vitrinealu-metrics-collection"
+  },
+  "id": "metrics-collection-reporting",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "metrics",
+      "name": "metrics"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "reporting",
+      "name": "reporting"
+    }
+  ]
+}

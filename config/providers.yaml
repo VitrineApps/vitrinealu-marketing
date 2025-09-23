@@ -1,0 +1,26 @@
+image_enhance:
+  backend: "gemini"
+  gemini:
+    model: "gemini-2.5-flash-image"
+    prompt_preset: "enhance_cinematic"
+  local:
+    upscaler: "realesrgan-x4"
+    denoise: "codeformer"
+background:
+  mode: "clean_or_replace"
+  replace_prompt: "modern, elegant interior, natural light, realistic, premium"
+video:
+  backend_order: ["sora_azure","runway","pika","ffmpeg"]
+  aspect:
+    vertical: "1080x1920"
+    horizontal: "1920x1080"
+caption:
+  provider_order: ["openai","gemini"]
+  tone:
+    instagram: "lifestyle, premium, warm, concise"
+    tiktok: "energetic, punchy, hook-first"
+    linkedin: "professional, spec-led, value-focused"
+approvals:
+  email_day: "Sat"
+  email_time: "10:00"
+  hmac_secret_env: "APPROVAL_HMAC_SECRET"

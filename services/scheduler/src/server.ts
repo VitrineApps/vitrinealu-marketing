@@ -1,59 +1,53 @@
-    // Carousel approval/rejection webhook
-    this.app.post('/webhooks/approval/carousel/:id', async (req, res) => {
-      const { id } = req.params;
-      const { action, token } = req.query;
-      if (!['approve', 'reject'].includes(String(action))) {
-        return res.status(400).json({ error: 'Invalid action' });
-      }
-      // TODO: Validate token (HMAC or similar)
-      try {
-        const repo = this.repository;
-        // Find carousel and Buffer draft ID
-        const carousel = repo.db.prepare('SELECT * FROM carousels WHERE id = ?').get(id);
-        if (!carousel) return res.status(404).json({ error: 'Carousel not found' });
-        if (!carousel.buffer_draft_id) return res.status(400).json({ error: 'No Buffer draft for this carousel' });
-        const buffer = new (await import('./bufferClient.js')).BufferClient();
-        if (action === 'approve') {
-          // Move Buffer draft to scheduled
-          await buffer.scheduleDraft(carousel.buffer_draft_id);
-          repo.db.prepare('UPDATE carousels SET status = ? WHERE id = ?').run('scheduled', id);
-        } else {
-          // Mark as rejected, optionally delete Buffer draft
-          await buffer.deleteDraft(carousel.buffer_draft_id);
-          repo.db.prepare('UPDATE carousels SET status = ? WHERE id = ?').run('rejected', id);
-        }
-        res.json({ ok: true });
-      } catch (err) {
-        logger.error('Carousel approval error:', err);
-        res.status(500).json({ error: 'Failed to process approval' });
-      }
-    });
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { Repository } from './repository.js';
+
+import { Repository, Post } from './repository.js';
 import { WeeklyPlanner } from './weeklyPlanner.js';
 import { PlanningService } from './plan.js';
 import { DigestGenerator } from './email/digest.js';
 import { mailer } from './mailer.js';
 import { config } from './config.js';
 import { logger } from './logger.js';
+import { BufferClient, ValidationError as BufferValidationError, ApiError as BufferApiError } from './bufferClient.js';
 
-// API request schemas
 const WeeklyPlanRequestSchema = z.object({
-  weekStart: z.string().datetime()
+  weekStart: z.string().datetime(),
 });
 
 const ScheduleWeeklyPostsRequestSchema = z.object({
-  weekStart: z.string().datetime()
+  weekStart: z.string().datetime(),
 });
 
 const SendDigestRequestSchema = z.object({
   startDate: z.string().datetime(),
   endDate: z.string().datetime(),
-  subject: z.string().optional()
+  subject: z.string().optional(),
+});
+
+const DraftRequestSchema = z.object({
+  assetId: z.string(),
+  platforms: z.array(z.string()).min(1),
+  caption: z.string().default(''),
+  hashtags: z.array(z.string()).default([]),
+  thumbnailUrl: z.string().url().optional(),
+  scheduledAt: z.string().datetime(),
+  bufferDraftId: z.string().optional(),
+});
+
+const DigestRequestSchema = z.object({
+  startDate: z.string().datetime(),
+  endDate: z.string().datetime(),
+});
+
+const ApprovalQuerySchema = z.object({
+  postId: z.string(),
+  assetId: z.string().optional(),
+  ts: z.string(),
+  signature: z.string(),
 });
 
 export class SchedulerServer {
@@ -61,12 +55,14 @@ export class SchedulerServer {
   private repository: Repository;
   private weeklyPlanner: WeeklyPlanner;
   private digestGenerator: DigestGenerator;
+  private bufferClient: BufferClient;
 
   constructor() {
     this.repository = new Repository();
     const planningService = new PlanningService();
     this.weeklyPlanner = new WeeklyPlanner(planningService, this.repository);
     this.digestGenerator = new DigestGenerator();
+    this.bufferClient = new BufferClient();
     this.app = express();
 
     this.setupMiddleware();
@@ -74,43 +70,31 @@ export class SchedulerServer {
   }
 
   private setupMiddleware(): void {
-    // Security middleware
     this.app.use(helmet());
-
-    // CORS configuration
     this.app.use(cors({
-      origin: ['http://localhost:3000', 'http://localhost:5678'], // Allow n8n and local development
-      credentials: true
+      origin: ['http://localhost:3000', 'http://localhost:5678'],
+      credentials: true,
     }));
-
-    // Rate limiting
     const limiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // limit each IP to 100 requests per windowMs
+      windowMs: 15 * 60 * 1000,
+      max: 100,
       message: 'Too many requests from this IP, please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
     });
     this.app.use('/api', limiter);
-
-    // JSON parsing
     this.app.use(express.json({ limit: '10mb' }));
   }
 
   private setupRoutes(): void {
-    // Health check
-    this.app.get('/health', (req, res) => {
+    this.app.get('/health', (_req, res) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
-    // Generate weekly plan
     this.app.post('/api/weekly-plan', async (req, res) => {
       try {
         const { weekStart } = WeeklyPlanRequestSchema.parse(req.body);
-        const weekStartDate = new Date(weekStart);
-
-        const plan = this.weeklyPlanner.generateWeeklyPlan(weekStartDate);
-
+        const plan = this.weeklyPlanner.generateWeeklyPlan(new Date(weekStart));
         res.json(plan);
       } catch (error) {
         logger.error('Error generating weekly plan:', error);
@@ -118,53 +102,98 @@ export class SchedulerServer {
       }
     });
 
-    // Schedule weekly posts
     this.app.post('/api/schedule-weekly-posts', async (req, res) => {
       try {
         const { weekStart } = ScheduleWeeklyPostsRequestSchema.parse(req.body);
-        const weekStartDate = new Date(weekStart);
-
-        const scheduledPosts = await this.weeklyPlanner.scheduleWeeklyPosts(weekStartDate);
-
-        res.json(scheduledPosts);
+        const scheduledPosts = await this.weeklyPlanner.scheduleWeeklyPosts(new Date(weekStart));
+        res.json(scheduledPosts.map((post) => this.serializePost(post)));
       } catch (error) {
         logger.error('Error scheduling weekly posts:', error);
         res.status(500).json({ error: 'Failed to schedule posts' });
       }
     });
 
-    // Send digest email
+    this.app.post('/api/drafts', async (req, res) => {
+      try {
+        const payload = DraftRequestSchema.parse(req.body);
+        const scheduledAt = new Date(payload.scheduledAt);
+        const posts: Post[] = [];
+        const bufferDraftId = payload.bufferDraftId ?? null;
+
+        for (const platform of payload.platforms) {
+          const post = this.repository.insertPost({
+            id: randomUUID(),
+            assetId: payload.assetId,
+            platform,
+            status: bufferDraftId ? 'pending_approval' : 'draft',
+            bufferDraftId,
+            caption: payload.caption,
+            hashtags: payload.hashtags,
+            thumbnailUrl: payload.thumbnailUrl ?? null,
+            scheduledAt,
+          });
+          posts.push(post);
+        }
+
+        res.status(201).json({ posts: posts.map((post) => this.serializePost(post)) });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        logger.error('Error creating drafts:', error);
+        res.status(500).json({ error: 'Failed to create drafts' });
+      }
+    });
+
+    this.app.get('/api/posts/pending', (req, res) => {
+      const limit = Number(req.query.limit ?? '50');
+      const posts = this.repository.listPostsByStatus('pending_approval', Number.isFinite(limit) ? limit : 50);
+      res.json({ posts: posts.map((post) => this.serializePost(post)) });
+    });
+
+    this.app.post('/api/digest', (req, res) => {
+      try {
+        const { startDate, endDate } = DigestRequestSchema.parse(req.body);
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const posts = this.repository.getPostsForDigest(start, end);
+        const html = this.digestGenerator.generateDigest(posts, start, end);
+        const text = this.digestGenerator.generateTextDigest(posts, start, end);
+        res.json({ html, text, count: posts.length });
+      } catch (error) {
+        logger.error('Error building digest:', error);
+        res.status(400).json({ error: 'Invalid request' });
+      }
+    });
+
     this.app.post('/api/send-digest', async (req, res) => {
       try {
         const { startDate, endDate, subject } = SendDigestRequestSchema.parse(req.body);
         const start = new Date(startDate);
         const end = new Date(endDate);
-
         const posts = this.repository.getPostsForDigest(start, end);
 
         if (posts.length === 0) {
-          return res.json({ message: 'No posts to send in digest' });
+          res.json({ message: 'No posts to send in digest' });
+          return;
         }
 
-        // Generate HTML digest
         const htmlDigest = this.digestGenerator.generateDigest(posts, start, end);
-
-        // Send digest email
         const subjectLine = subject || this.digestGenerator.getSubjectLine(posts.length, start);
         await mailer.sendDigest(config.config.OWNER_EMAIL, subjectLine, htmlDigest);
 
-        res.json({
-          message: `Digest sent for ${posts.length} posts`,
-          postCount: posts.length
-        });
+        res.json({ message: 'Digest sent for ' + String(posts.length) + ' posts', postCount: posts.length });
       } catch (error) {
         logger.error('Error sending digest:', error);
         res.status(500).json({ error: 'Failed to send digest' });
       }
     });
 
-    // Get schedule configuration
-    this.app.get('/api/schedule-config', (req, res) => {
+    this.app.post('/webhooks/approve', this.handleApproval('approve'));
+    this.app.post('/webhooks/reject', this.handleApproval('reject'));
+
+    this.app.get('/api/schedule-config', (_req, res) => {
       try {
         const scheduleConfig = this.weeklyPlanner.getScheduleConfig();
         res.json(scheduleConfig);
@@ -174,8 +203,7 @@ export class SchedulerServer {
       }
     });
 
-    // Validate schedule configuration
-    this.app.get('/api/validate-config', (req, res) => {
+    this.app.get('/api/validate-config', (_req, res) => {
       try {
         const validation = this.weeklyPlanner.validateConfiguration();
         res.json(validation);
@@ -185,21 +213,84 @@ export class SchedulerServer {
       }
     });
 
-    // 404 handler
-    this.app.use('*', (req, res) => {
+    this.app.use('*', (_req, res) => {
       res.status(404).json({ error: 'Endpoint not found' });
     });
 
-    // Error handler
-    this.app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    this.app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
       logger.error('Unhandled error:', error);
       res.status(500).json({ error: 'Internal server error' });
     });
   }
 
+  private handleApproval(action: 'approve' | 'reject') {
+    return async (req: express.Request, res: express.Response): Promise<void> => {
+      try {
+        const query = ApprovalQuerySchema.parse(req.query);
+        const valid = config.verifyApprovalPayload({
+          postId: query.postId,
+          action,
+          assetId: query.assetId,
+          timestamp: query.ts,
+          signature: query.signature,
+          maxAgeMs: 1000 * 60 * 60 * 24 * 7,
+        });
+        if (!valid) {
+          res.status(403).json({ error: 'Invalid or expired signature' });
+          return;
+        }
+
+        const post = this.repository.getPostById(query.postId);
+        if (!post) {
+          res.status(404).json({ error: 'Post not found' });
+          return;
+        }
+
+        try {
+          if (action === 'approve') {
+            if (post.bufferDraftId) {
+              await this.bufferClient.scheduleDraft(post.bufferDraftId);
+            }
+            this.repository.updatePostStatus(post.id, 'approved');
+          } else {
+            if (post.bufferDraftId) {
+              await this.bufferClient.deleteDraft(post.bufferDraftId);
+            }
+            this.repository.updatePostStatus(post.id, 'rejected', null);
+          }
+          this.repository.recordApproval(post.id, action, 'owner');
+          res.json({ ok: true });
+        } catch (err) {
+          if (err instanceof BufferApiError || err instanceof BufferValidationError) {
+            logger.error('Buffer action failed for post ' + post.id + ': ' + err.message);
+            res.status(502).json({ error: err.message });
+            return;
+          }
+          throw err;
+        }
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        logger.error('Approval webhook error:', error);
+        res.status(500).json({ error: 'Failed to process approval' });
+      }
+    };
+  }
+
+  private serializePost(post: Post) {
+    return {
+      ...post,
+      scheduledAt: post.scheduledAt.toISOString(),
+      createdAt: post.createdAt.toISOString(),
+      updatedAt: post.updatedAt.toISOString(),
+    };
+  }
+
   public start(port: number = 8787): void {
     this.app.listen(port, () => {
-      logger.info(`Scheduler API server listening on port ${port}`);
+      logger.info('Scheduler API server listening on port ' + port);
     });
   }
 
@@ -212,9 +303,8 @@ export class SchedulerServer {
   }
 }
 
-// Start server if this file is run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === 'file://' + process.argv[1]) {
   const server = new SchedulerServer();
-  const port = parseInt(process.env.PORT || '8787');
+  const port = parseInt(process.env.PORT || '8787', 10);
   server.start(port);
 }
