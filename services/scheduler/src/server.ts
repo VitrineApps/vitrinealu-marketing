@@ -1,3 +1,33 @@
+    // Carousel approval/rejection webhook
+    this.app.post('/webhooks/approval/carousel/:id', async (req, res) => {
+      const { id } = req.params;
+      const { action, token } = req.query;
+      if (!['approve', 'reject'].includes(String(action))) {
+        return res.status(400).json({ error: 'Invalid action' });
+      }
+      // TODO: Validate token (HMAC or similar)
+      try {
+        const repo = this.repository;
+        // Find carousel and Buffer draft ID
+        const carousel = repo.db.prepare('SELECT * FROM carousels WHERE id = ?').get(id);
+        if (!carousel) return res.status(404).json({ error: 'Carousel not found' });
+        if (!carousel.buffer_draft_id) return res.status(400).json({ error: 'No Buffer draft for this carousel' });
+        const buffer = new (await import('./bufferClient.js')).BufferClient();
+        if (action === 'approve') {
+          // Move Buffer draft to scheduled
+          await buffer.scheduleDraft(carousel.buffer_draft_id);
+          repo.db.prepare('UPDATE carousels SET status = ? WHERE id = ?').run('scheduled', id);
+        } else {
+          // Mark as rejected, optionally delete Buffer draft
+          await buffer.deleteDraft(carousel.buffer_draft_id);
+          repo.db.prepare('UPDATE carousels SET status = ? WHERE id = ?').run('rejected', id);
+        }
+        res.json({ ok: true });
+      } catch (err) {
+        logger.error('Carousel approval error:', err);
+        res.status(500).json({ error: 'Failed to process approval' });
+      }
+    });
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import * as crypto from 'crypto';
 import * as YAML from 'yaml';
 
+
 // Environment schema
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -11,6 +12,10 @@ const envSchema = z.object({
 
   // Buffer API
   BUFFER_ACCESS_TOKEN: z.string().min(1, 'BUFFER_ACCESS_TOKEN is required'),
+  CAROUSEL_MIN_IMAGES: z.coerce.number().default(2),
+  CAROUSEL_MAX_IMAGES: z.coerce.number().default(5),
+  BUFFER_BASE_URL: z.string().default('https://api.buffer.com/2/'),
+  HTTP_TIMEOUT_MS: z.coerce.number().default(15000),
 
   // Email configuration
   SMTP_HOST: z.string().optional(),

@@ -1,244 +1,137 @@
-import { z } from 'zod';
 import { config } from './config.js';
+import { CarouselDraftInput, CarouselDraftResult } from './types';
+import pRetry from 'p-retry';
+import pino from 'pino';
 
-// Buffer API response schemas
-const BufferProfileSchema = z.object({
-  id: z.string(),
-  service: z.string(),
-  service_username: z.string(),
-  service_name: z.string()
-});
+// Error classes
+export class RateLimitError extends Error {
+  retryAfter?: number;
+  constructor(message: string, retryAfter?: number) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.retryAfter = retryAfter;
+  }
+}
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
-const BufferPostSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  media: z.object({
-    picture: z.string().optional(),
-    thumbnail: z.string().optional(),
-    video: z.string().optional()
-  }).optional(),
-  created_at: z.number(),
-  scheduled_at: z.number().optional(),
-  status: z.enum(['draft', 'pending', 'sent']),
-  service_link: z.string().optional(),
-  statistics: z.object({
-    reach: z.number().optional(),
-    impressions: z.number().optional(),
-    engagements: z.number().optional()
-  }).optional()
-});
+const logger = pino({ level: 'info' });
 
-const BufferUpdateSchema = z.object({
-  success: z.boolean(),
-  buffer_count: z.number().optional(),
-  buffer_percentage: z.number().optional(),
-  updates: z.array(BufferPostSchema).optional()
-});
+const PLATFORM_TEXT_LIMITS: Record<string, number> = {
+  instagram: 2200,
+  facebook: 63206,
+};
 
-export type BufferProfile = z.infer<typeof BufferProfileSchema>;
-export type BufferPost = z.infer<typeof BufferPostSchema>;
-export type BufferUpdate = z.infer<typeof BufferUpdateSchema>;
+export async function createCarouselDraft(input: CarouselDraftInput): Promise<CarouselDraftResult> {
+  const minImages = Number(process.env.CAROUSEL_MIN_IMAGES || config.config.CAROUSEL_MIN_IMAGES || 2);
+  const maxImages = Number(process.env.CAROUSEL_MAX_IMAGES || config.config.CAROUSEL_MAX_IMAGES || 5);
+  if (!Array.isArray(input.mediaUrls) || input.mediaUrls.length < minImages || input.mediaUrls.length > maxImages) {
+    throw new ValidationError(`Carousel must have between ${minImages} and ${maxImages} images`);
+  }
+  if (!['instagram', 'facebook'].includes(input.platform)) {
+    throw new ValidationError('Platform must be instagram or facebook');
+  }
+  const textLimit = PLATFORM_TEXT_LIMITS[input.platform];
+  if (input.text.length > textLimit) {
+    throw new ValidationError(`Text exceeds platform limit (${textLimit})`);
+  }
+  const baseUrl = process.env.BUFFER_BASE_URL || config.config.BUFFER_BASE_URL || 'https://api.buffer.com/2/';
+  const accessToken = process.env.BUFFER_ACCESS_TOKEN || config.config.BUFFER_ACCESS_TOKEN;
+  if (!accessToken) throw new ValidationError('Missing BUFFER_ACCESS_TOKEN');
+  const timeout = Number(process.env.HTTP_TIMEOUT_MS || config.config.HTTP_TIMEOUT_MS || 15000);
 
-export class BufferClient {
-  private accessToken: string;
-  private baseUrl = 'https://api.bufferapp.com/1';
+  const payload: any = {
+    profile_ids: [input.channelId],
+    text: input.text,
+    media: { photos: input.mediaUrls.map(url => ({ url })) },
+    ...(input.scheduledAt && { scheduled_at: Math.floor(new Date(input.scheduledAt).getTime() / 1000) }),
+    ...(input.link && { link: input.link }),
+  };
 
-  constructor(accessToken: string = config.config.BUFFER_ACCESS_TOKEN) {
-    this.accessToken = accessToken;
+  const url = `${baseUrl.replace(/\/$/, '')}/updates/create.json`;
+
+  function redact(str: string) {
+    return str.replace(accessToken, '***REDACTED***');
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}?access_token=${this.accessToken}`;
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      }
+  return pRetry(async (attempt) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    };
+    logger.info({
+      msg: 'Creating carousel draft',
+      attempt,
+      url: redact(url),
+      channelId: input.channelId,
+      platform: input.platform,
+      mediaCount: input.mediaUrls.length,
     });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Buffer API error: ${response.status} ${error}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      logger.error({ msg: 'Network error', err: err?.message });
+  throw (pRetry as any).abort(new ApiError('Network error', 0));
+    } finally {
+      clearTimeout(timer);
     }
-
-    const data = await response.json();
-    return data as T;
-  }
-
-  /**
-   * Get all connected social media profiles
-   */
-  async getProfiles(): Promise<BufferProfile[]> {
-    const data = await this.request('/profiles.json');
-    return z.array(BufferProfileSchema).parse(data);
-  }
-
-  /**
-   * Get profile by ID
-   */
-  async getProfile(profileId: string): Promise<BufferProfile> {
-    const data = await this.request(`/profiles/${profileId}.json`);
-    return BufferProfileSchema.parse(data);
-  }
-
-  /**
-   * Create a draft post
-   */
-  async createDraft(profileIds: string[], text: string, options: {
-    media?: {
-      picture?: string;
-      video?: string;
-      thumbnail?: string;
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get('Retry-After')) || 1;
+      logger.warn({ msg: 'Rate limited', retryAfter });
+      throw new RateLimitError('Rate limited', retryAfter);
+    }
+    if (res.status >= 500) {
+      logger.warn({ msg: 'Server error', status: res.status });
+      throw new Error(`Server error ${res.status}`);
+    }
+    if (res.status >= 400) {
+      const errBody = await res.text();
+      logger.error({ msg: 'API error', status: res.status, errBody: redact(errBody) });
+  throw (pRetry as any).abort(new ApiError(errBody, res.status));
+    }
+    const data: any = await res.json();
+    // Buffer v2: { update: { id, media_attachments, service } }
+    if (!data.update || !data.update.id) {
+      logger.error({ msg: 'Malformed response', data });
+  throw (pRetry as any).abort(new ApiError('Malformed response', 500));
+    }
+    return {
+      updateId: data.update.id,
+      mediaIds: (data.update.media_attachments || []).map((m: any) => m.id).filter(Boolean),
+      platform: data.update.service || input.platform,
     };
-    scheduled_at?: Date;
-    retweet?: boolean;
-    attachment?: boolean;
-  } = {}): Promise<BufferUpdate> {
-    const payload: any = {
-      profile_ids: profileIds,
-      text,
-      ...options.media && { media: options.media },
-      ...options.scheduled_at && { scheduled_at: Math.floor(options.scheduled_at.getTime() / 1000) },
-      ...options.retweet !== undefined && { retweet: options.retweet },
-      ...options.attachment !== undefined && { attachment: options.attachment }
-    };
-
-    const data = await this.request('/updates/create.json', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-
-    return BufferUpdateSchema.parse(data);
-  }
-
-  /**
-   * Update an existing draft post
-   */
-  async updateDraft(updateId: string, updates: {
-    text?: string;
-    media?: {
-      picture?: string;
-      video?: string;
-      thumbnail?: string;
-    };
-    scheduled_at?: Date;
-    profile_ids?: string[];
-  }): Promise<BufferUpdate> {
-    const payload: any = {
-      ...updates.text && { text: updates.text },
-      ...updates.media && { media: updates.media },
-      ...updates.scheduled_at && { scheduled_at: Math.floor(updates.scheduled_at.getTime() / 1000) },
-      ...updates.profile_ids && { profile_ids: updates.profile_ids }
-    };
-
-    const data = await this.request(`/updates/${updateId}/update.json`, {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-
-    return BufferUpdateSchema.parse(data);
-  }
-
-  /**
-   * Get post details
-   */
-  async getPost(updateId: string): Promise<BufferPost> {
-    const data = await this.request(`/updates/${updateId}.json`);
-    return BufferPostSchema.parse(data);
-  }
-
-  /**
-   * Delete a draft post
-   */
-  async deleteDraft(updateId: string): Promise<{ success: boolean }> {
-    const data = await this.request(`/updates/${updateId}/destroy.json`, {
-      method: 'POST'
-    });
-
-    return z.object({ success: z.boolean() }).parse(data);
-  }
-
-  /**
-   * Move draft to scheduled queue
-   */
-  async scheduleDraft(updateId: string): Promise<BufferUpdate> {
-    const data = await this.request(`/updates/${updateId}/share.json`, {
-      method: 'POST'
-    });
-
-    return BufferUpdateSchema.parse(data);
-  }
-
-  /**
-   * Get pending/scheduled posts
-   */
-  async getPendingPosts(profileId?: string): Promise<BufferPost[]> {
-    const endpoint = profileId
-      ? `/profiles/${profileId}/updates/pending.json`
-      : '/updates/pending.json';
-
-    const data = await this.request<any>(endpoint);
-    return z.array(BufferPostSchema).parse(data.updates || data);
-  }
-
-  /**
-   * Get sent posts
-   */
-  async getSentPosts(profileId?: string, options: {
-    count?: number;
-    since?: Date;
-    page?: number;
-  } = {}): Promise<BufferPost[]> {
-    const params = new URLSearchParams();
-    if (options.count) params.append('count', options.count.toString());
-    if (options.since) params.append('since', Math.floor(options.since.getTime() / 1000).toString());
-    if (options.page) params.append('page', options.page.toString());
-
-    const query = params.toString();
-    const endpoint = profileId
-      ? `/profiles/${profileId}/updates/sent.json${query ? `?${query}` : ''}`
-      : `/updates/sent.json${query ? `?${query}` : ''}`;
-
-    const data = await this.request<any>(endpoint);
-    return z.array(BufferPostSchema).parse(data.updates || data);
-  }
-
-  /**
-   * Shuffle/update post order in queue
-   */
-  async reorderQueue(profileId: string, updateIds: string[]): Promise<{ success: boolean }> {
-    const data = await this.request(`/profiles/${profileId}/updates/reorder.json`, {
-      method: 'POST',
-      body: JSON.stringify({
-        order: updateIds
-      })
-    });
-
-    return z.object({ success: z.boolean() }).parse(data);
-  }
-
-  /**
-   * Get analytics for a post
-   */
-  async getPostAnalytics(updateId: string): Promise<{
-    reach: number;
-    impressions: number;
-    engagements: number;
-    clicks: number;
-    favorites: number;
-    retweets: number;
-  }> {
-    const data = await this.request(`/updates/${updateId}/analytics.json`);
-
-    return z.object({
-      reach: z.number(),
-      impressions: z.number(),
-      engagements: z.number(),
-      clicks: z.number(),
-      favorites: z.number(),
-      retweets: z.number()
-    }).parse(data);
-  }
+  }, {
+    retries: 4,
+    minTimeout: 500,
+    maxTimeout: 3000,
+    randomize: true,
+    onFailedAttempt: (err) => {
+      // err is FailedAttemptError from p-retry
+      const orig = err?.cause;
+      if (orig instanceof RateLimitError && typeof orig.retryAfter === 'number' && orig.retryAfter > 0) {
+        logger.warn({ msg: 'Retrying after rate limit', retryAfter: orig.retryAfter });
+  return new Promise(res => setTimeout(res, (orig.retryAfter ?? 1) * 1000));
+      }
+    },
+  });
 }

@@ -1,3 +1,47 @@
+import tempfile
+import os
+    def request_generation(self, prompt: str, negative_prompt: str = "", seed: Optional[int] = None, size: tuple = (1024, 1024)) -> str:
+        """
+        Submit a generation request to Runway and return job_id.
+        """
+        width, height = size
+        return self._submit_generation_task(prompt, negative_prompt, width, height, steps=25, guidance_scale=7.5, seed=seed)
+
+    def poll(self, job_id: str, timeout_ms: int = 180000) -> str:
+        """
+        Poll for job completion with exponential backoff. On completion, download to temp file and return path.
+        """
+        start = time.time()
+        attempt = 0
+        delay = 2
+        max_delay = 15
+        while (time.time() - start) * 1000 < timeout_ms:
+            try:
+                result = self._poll_task_status(job_id, max_wait_time=timeout_ms // 1000)
+                output_data = result.get("output", {})
+                image_data = output_data.get("image")
+                if image_data:
+                    # Save to temp file
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                    tmp.write(base64.b64decode(image_data))
+                    tmp.close()
+                    return tmp.name
+                elif result.get("status") == "FAILED":
+                    raise RuntimeError(f"Runway job failed: {result.get('failure_reason','unknown')}")
+            except Exception as e:
+                log.warning(f"Polling error: {e}, retrying...")
+            attempt += 1
+            time.sleep(min(delay, max_delay))
+            delay *= 2
+        raise TimeoutError(f"Runway job {job_id} did not complete in {timeout_ms} ms")
+
+def generate_background_remote(prompt: str, negative_prompt: str = "people, text, watermark", seed: Optional[int] = None, size: tuple = (1024, 1024), timeout_ms: int = 180000) -> str:
+    """
+    High-level: submit, poll, and download result. Returns temp file path.
+    """
+    adapter = get_runway_adapter()
+    job_id = adapter.request_generation(prompt, negative_prompt, seed, size)
+    return adapter.poll(job_id, timeout_ms=timeout_ms)
 """Runway ML adapter for background generation."""
 
 import requests

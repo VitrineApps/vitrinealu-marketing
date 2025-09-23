@@ -1,3 +1,29 @@
+// Slot type for carousel planning
+export interface CarouselSlot {
+  platform: keyof typeof PLATFORM_OPTIMALS;
+  scheduledAt: Date;
+}
+
+/**
+ * Plan carousel slots for a platform, respecting quiet hours and platform rules
+ */
+export function planCarouselSlots({ platform, count }: { platform: keyof typeof PLATFORM_OPTIMALS; count: number }): CarouselSlot[] {
+  const planner = new PlanningService();
+  const now = new Date();
+  const end = new Date(now);
+  end.setDate(now.getDate() + 14); // Plan up to 2 weeks ahead
+  const allSlots = planner.generatePlatformSchedule(platform, planner.getOptimalTimes(platform), now, end);
+  // Filter out slots in quiet hours (already handled by generatePlatformSchedule)
+  // Distribute evenly
+  const slots: CarouselSlot[] = [];
+  if (allSlots.length === 0 || count === 0) return slots;
+  const step = Math.floor(allSlots.length / count);
+  for (let i = 0; i < count; i++) {
+    const idx = Math.min(i * step, allSlots.length - 1);
+    slots.push({ platform, scheduledAt: allSlots[idx] });
+  }
+  return slots;
+}
 import { z } from 'zod';
 import { config } from './config.js';
 
@@ -75,8 +101,9 @@ export class PlanningService {
 
   /**
    * Generate schedule for a single platform
+   * (now public for use in planCarouselSlots)
    */
-  private generatePlatformSchedule(
+  public generatePlatformSchedule(
     platform: string,
     optimalTimes: TimeSlot[],
     startDate: Date,

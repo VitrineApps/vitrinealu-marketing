@@ -242,26 +242,36 @@ async def replace_background(
         mask = extract_foreground_mask(input_image)
         mask = refine_mask(mask, input_image)
         
+
         # Generate new background
         target_height, target_width = input_image.shape[:2]
-        # 4K rejection logic
-        if settings.bg_engine == BGEngine.SDXL:
-            max_dim = max(target_width, target_height)
-            if max_dim > 4096 and os.getenv('ALLOW_4K', '0') != '1':
+        max_dim = max(target_width, target_height)
+        engine = settings.bg_engine
+        allow_4k = os.getenv('ALLOW_4K', '0') == '1'
+        runway_timeout_ms = int(os.getenv('RUNWAY_TIMEOUT_MS', '180000'))
+        fallback_local = os.getenv('BG_FALLBACK_LOCAL', '0') == '1'
+        generated_bg = None
+        error = None
+        if engine == BGEngine.RUNWAY:
+            try:
+                if max_dim > 4096 and not allow_4k:
+                    raise HTTPException(status_code=400, detail="4K+ resolution not allowed in Runway mode unless ALLOW_4K=1")
+                from .runway_adapter import generate_background_remote
+                tmp_path = generate_background_remote(prompt, negative_prompt, seed, (1024, 1024), timeout_ms=runway_timeout_ms)
+                generated_bg = load_image(open(tmp_path, 'rb').read())
+                os.unlink(tmp_path)
+            except Exception as e:
+                error = e
+                log.warning(f"Runway generation failed: {e}")
+                if fallback_local:
+                    log.info("Falling back to local SDXL generation...")
+                    engine = BGEngine.SDXL
+                else:
+                    raise HTTPException(status_code=500, detail=f"Runway generation failed: {e}")
+        if engine == BGEngine.SDXL:
+            if max_dim > 4096 and not allow_4k:
                 raise HTTPException(status_code=400, detail="4K+ resolution not allowed in SDXL mode unless ALLOW_4K=1")
-            # Use local SDXL generation
             generated_bg = generate_background_sdxl(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                width=1024,  # Generate at high resolution
-                height=1024,
-                steps=steps,
-                guidance_scale=guidance_scale,
-                seed=seed
-            )
-        elif settings.bg_engine == BGEngine.RUNWAY:
-            # Use Runway API
-            generated_bg = generate_background_runway(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
                 width=1024,
@@ -270,9 +280,9 @@ async def replace_background(
                 guidance_scale=guidance_scale,
                 seed=seed
             )
-        else:
-            raise HTTPException(status_code=500, detail=f"Unsupported engine: {settings.bg_engine}")
-        
+        if generated_bg is None:
+            raise HTTPException(status_code=500, detail="Background generation failed (no image)")
+
         # Resize background to match input image
         background = resize_background_to_match(generated_bg, (target_height, target_width))
         

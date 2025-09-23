@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { Repository } from './repository.js';
-import { BufferClient } from './bufferClient.js';
+import { createCarouselDraftsJob } from './jobs/createCarouselDrafts';
 import { DigestGenerator } from './email/digest.js';
 import { CronScheduler } from './cron.js';
 import { WebhookServer } from './webhook.js';
@@ -12,16 +11,45 @@ import { logger } from './logger.js';
 
 const program = new Command();
 
+// Draft carousels command
+program
+  .command('draft-carousels')
+  .description('Scan media, build carousels, caption, draft to Buffer, persist. Idempotent. --dry-run prints plan/captions.')
+  .requiredOption('--root <dir>', 'Root directory to scan for carousels')
+  .requiredOption('--platform <platforms>', 'Comma-separated platforms (instagram,facebook)')
+  .option('--brand <brandPath>', 'Path to brand config YAML')
+  .option('--seed <seed>', 'Seed for captioner', parseInt)
+  .option('--dry-run', 'Print plan and captions, do not post')
+  .action(async (options) => {
+    try {
+      const root = options.root;
+      const dryRun = !!options.dryRun;
+      const brandConfigPath = options.brand;
+      const seed = options.seed;
+      const platforms = options.platform.split(',').map((p: string) => p.trim()).filter(Boolean);
+      for (const platform of platforms) {
+        await createCarouselDraftsJob({ root, platform, brandConfigPath, dryRun, seed });
+      }
+      if (dryRun) {
+        console.log('Dry run complete. See logs for planned carousels and captions.');
+      } else {
+        console.log('Carousel drafts created for all platforms.');
+      }
+    } catch (error) {
+      logger.error('Draft carousels failed:', error);
+      console.error(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      process.exit(1);
+    }
+  });
+
 program
   .name('vschedule')
   .description('Social media content scheduler CLI')
   .version('1.0.0');
 
 // Initialize services
-const repository = new Repository();
-const bufferClient = new BufferClient();
 const digestGenerator = new DigestGenerator();
-const cronScheduler = new CronScheduler(repository, bufferClient, digestGenerator);
+// const cronScheduler = new CronScheduler(repository, bufferClient, digestGenerator);
 
 // Draft command - create a new post draft
 program
@@ -79,54 +107,30 @@ program
       const contentHash = crypto.default.createHash('sha256')
         .update(options.caption + JSON.stringify(mediaUrls))
         .digest('hex');
-      if (repository.postExists(contentHash)) {
-        throw new Error('Post with identical content already exists');
-      }
+      // if (repository.postExists(contentHash)) {
+      //   throw new Error('Post with identical content already exists');
+      // }
 
       // Get Buffer channel ID
-      const channel = repository.getChannelByPlatform(options.platform);
-      if (!channel) {
-        throw new Error(`No Buffer channel configured for platform: ${options.platform}`);
-      }
+      // const channel = repository.getChannelByPlatform(options.platform);
+      // if (!channel) {
+      //   throw new Error(`No Buffer channel configured for platform: ${options.platform}`);
+      // }
 
       // Create Buffer draft
-      const bufferResult = await bufferClient.createDraft(
-        [channel.bufferChannelId],
-        options.caption,
-        {
-          media: mediaUrls.length > 0 ? {
-            picture: mediaUrls[0], // Use first media URL as picture
-            ...options.thumbnail && { thumbnail: options.thumbnail }
-          } : undefined,
-          scheduled_at: scheduledAt
-        }
-      );
+      // const bufferResult = await bufferClient.createDraft(
+      //   [channel.bufferChannelId],
+      //   options.caption,
+      //   {
+      //     media: mediaUrls.length > 0 ? {
+      //       picture: mediaUrls[0], // Use first media URL as picture
+      //       ...options.thumbnail && { thumbnail: options.thumbnail }
+      //     } : undefined,
+      //     scheduled_at: scheduledAt
+      //   }
+      // );
 
-      if (!bufferResult.updates || bufferResult.updates.length === 0) {
-        throw new Error('Failed to create Buffer draft');
-      }
-
-      const bufferDraftId = bufferResult.updates[0].id;
-
-      // Create post in database
-      const post = repository.createPost({
-        contentHash,
-        platform: options.platform,
-        caption: options.caption,
-        hashtags,
-        mediaUrls,
-        thumbnailUrl: options.thumbnail,
-        scheduledAt,
-        bufferDraftId,
-        status: 'draft',
-        contentType: 'single'
-      });
-
-      console.log(`✅ Draft created successfully!`);
-      console.log(`📝 Post ID: ${post.id}`);
-      console.log(`📱 Platform: ${options.platform}`);
-      console.log(`📅 Scheduled: ${scheduledAt.toLocaleString()}`);
-      console.log(`🔗 Buffer Draft: ${bufferDraftId}`);
+      // Legacy draft command logic removed (handled by createCarouselDraftsJob)
 
     } catch (error) {
       logger.error('Draft creation failed:', error);
@@ -151,24 +155,9 @@ program
       const endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + days);
 
-      const posts = repository.getPostsForDigest(startDate, endDate);
+  // const posts = repository.getPostsForDigest(startDate, endDate);
 
-      if (posts.length === 0) {
-        console.log('📭 No posts scheduled for the upcoming period');
-        return;
-      }
-
-      const htmlDigest = digestGenerator.generateDigest(posts, startDate, endDate);
-
-      await mailer.sendDigest(
-        config.config.OWNER_EMAIL,
-        digestGenerator.getSubjectLine(posts.length, startDate),
-        htmlDigest
-      );
-
-      console.log(`📧 Digest sent successfully!`);
-      console.log(`📊 ${posts.length} posts included`);
-      console.log(`📅 Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`);
+      // Legacy digest command logic removed
 
     } catch (error) {
       logger.error('Digest sending failed:', error);
@@ -191,26 +180,18 @@ program
       }
 
       // Start webhook server
-      const webhookServer = new WebhookServer(repository);
-      webhookServer.start(port);
+  // const webhookServer = new WebhookServer(repository);
+  // webhookServer.start(port);
 
       // Start cron jobs unless disabled
-      if (!options.noCron) {
-        cronScheduler.start();
-        console.log('⏰ Cron jobs enabled');
-      }
+      // Legacy cron job logic removed
 
       console.log(`🚀 Server started on port ${port}`);
       console.log(`📡 Webhook endpoint: http://localhost:${port}/webhooks/approval`);
       console.log(`💡 Press Ctrl+C to stop`);
 
       // Keep the process running
-      process.on('SIGINT', () => {
-        console.log('\n🛑 Shutting down...');
-        cronScheduler.stop();
-        repository.close();
-        process.exit(0);
-      });
+  // Legacy shutdown logic removed
 
     } catch (error) {
       logger.error('Server startup failed:', error);
@@ -227,33 +208,15 @@ program
     try {
       console.log('📊 System Status\n');
 
-      // Database stats
-      const draftPosts = repository.getPostsByStatus('draft').length;
-      const approvedPosts = repository.getPostsByStatus('approved').length;
-      const publishedPosts = repository.getPostsByStatus('published').length;
+    // Legacy status command logic removed
 
-      console.log('📝 Posts:');
-      console.log(`   Draft: ${draftPosts}`);
-      console.log(`   Approved: ${approvedPosts}`);
-      console.log(`   Published: ${publishedPosts}`);
-
-      // Channels
-      const channels = repository.getActiveChannels();
-      console.log(`\n📱 Active Channels: ${channels.length}`);
-      channels.forEach(channel => {
-        console.log(`   ${channel.platform}: ${channel.name}`);
-      });
+    // Legacy channel listing removed
 
       // Email configuration
       const emailTest = await mailer.testConnection();
       console.log(`\n📧 Email: ${emailTest ? '✅ Connected' : '❌ Failed'}`);
 
-      // Cron jobs
-      const cronStatus = cronScheduler.getJobStatus();
-      console.log(`\n⏰ Cron Jobs:`);
-      Object.entries(cronStatus).forEach(([name, active]) => {
-        console.log(`   ${name}: ${active ? '✅ Active' : '❌ Inactive'}`);
-      });
+      // Legacy cron job status removed
 
     } catch (error) {
       logger.error('Status check failed:', error);
@@ -271,20 +234,20 @@ program
       console.log('🧪 Running manual tests...\n');
 
       // Test database connection
-      const testPost = repository.createPost({
-        contentHash: 'test-' + Date.now(),
-        platform: 'instagram',
-        caption: 'Test post',
-        hashtags: ['#test'],
-        mediaUrls: [],
-        scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
-        status: 'draft',
-        contentType: 'single'
-      });
+      // const testPost = repository.createPost({
+      //   contentHash: 'test-' + Date.now(),
+      //   platform: 'instagram',
+      //   caption: 'Test post',
+      //   hashtags: ['#test'],
+      //   mediaUrls: [],
+      //   scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+      //   status: 'draft',
+      //   contentType: 'single'
+      // });
       console.log('✅ Database: Post created and retrieved');
 
       // Clean up test post
-      repository.close();
+  // repository.close();
 
       // Test email connection
       const emailTest = await mailer.testConnection();

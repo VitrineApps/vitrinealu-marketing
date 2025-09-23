@@ -1,3 +1,51 @@
+// Generate caption for a multi-image carousel
+export async function generateForCarousel({ mediaPaths, platform, brandPath, seed }: { mediaPaths: string[]; platform: Platform; brandPath: string; seed?: number }): Promise<CaptionJSON> {
+  const brandKit = await loadBrandKit(brandPath);
+  // Use all basenames as product tags
+  const productTags = mediaPaths.map(p => path.basename(p, path.extname(p)).replace(/[-_]/g, ' '));
+  // Compose a brief for the carousel
+  const brief = `Carousel: ${productTags.join(', ')}`;
+  // Use first image's EXIF as a hint (could be extended)
+  const exifHints = await extractExifHints(mediaPaths[0]).catch(() => ({ lens: 'standard' as const, timeOfDay: 'day' as const }));
+  const promptInputs = {
+    brief,
+    productTags,
+    location: brandKit.locale,
+    features: [],
+    brandTone: brandKit.toneWords,
+    exifHints,
+    brand: {
+      toneWords: brandKit.toneWords,
+      bannedHashtags: brandKit.bannedHashtags,
+      locale: brandKit.locale,
+    },
+  };
+  const prompt = buildPrompt(platform, promptInputs);
+  const provider = getProvider('openai'); // Or configurable
+  const rawCaption = await provider.generate({
+    platform,
+    brief: prompt,
+    productTags,
+    location: brandKit.locale,
+    features: [],
+    brandTone: brandKit.toneWords,
+    exif: exifHints,
+    seed,
+  });
+  const validated = CaptionJSONSchema.parse(rawCaption);
+  // Hashtag limits
+  const limitByPlatform = { instagram: 30, tiktok: 30, youtube_shorts: 15, linkedin: 4, facebook: 5 } as const;
+  const lim = limitByPlatform[platform];
+  const deduped = Array.from(new Set(validated.hashtags.map(h => h.toLowerCase())));
+  const seedNum = seed ?? 0;
+  const sorted = deduped.sort((a,b) => (a+b+seedNum).localeCompare(b+a+seedNum));
+  validated.hashtags = sorted.slice(0, lim);
+  validated.caption = filterBannedWords(validated.caption, brandKit.bannedHashtags);
+  validated.hashtags = applyBanlist(validated.hashtags, brandKit.bannedHashtags);
+  if (platform === 'linkedin') validated.caption = removeEmojis(validated.caption);
+  validated.caption = clampByPlatform(platform, validated.caption);
+  return validated;
+}
 import { globby } from 'globby';
 import { ensureDir } from 'fs-extra';
 import { readFile, writeFile } from 'node:fs/promises';
