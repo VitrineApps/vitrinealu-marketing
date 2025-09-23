@@ -118,7 +118,8 @@ program
         thumbnailUrl: options.thumbnail,
         scheduledAt,
         bufferDraftId,
-        status: 'draft'
+        status: 'draft',
+        contentType: 'single'
       });
 
       console.log(`✅ Draft created successfully!`);
@@ -277,7 +278,8 @@ program
         hashtags: ['#test'],
         mediaUrls: [],
         scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
-        status: 'draft'
+        status: 'draft',
+        contentType: 'single'
       });
       console.log('✅ Database: Post created and retrieved');
 

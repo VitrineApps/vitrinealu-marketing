@@ -1,0 +1,148 @@
+# Weekly Content Schedule Configuration
+# Defines posting slots, content types, and platform-specific rules
+
+# Weekly schedule structure
+# Each day can have multiple slots with different content types
+weekly_schedule:
+  monday:
+    - time: "09:00"
+      content_type: "carousel"
+      platforms: ["instagram", "facebook"]
+      priority: "high"
+    - time: "14:00"
+      content_type: "single"
+      platforms: ["linkedin"]
+      priority: "medium"
+
+  tuesday:
+    - time: "10:00"
+      content_type: "single"
+      platforms: ["instagram", "tiktok"]
+      priority: "medium"
+    - time: "16:00"
+      content_type: "carousel"
+      platforms: ["facebook"]
+      priority: "high"
+
+  wednesday:
+    - time: "11:00"
+      content_type: "single"
+      platforms: ["linkedin", "facebook"]
+      priority: "medium"
+    - time: "15:00"
+      content_type: "carousel"
+      platforms: ["instagram"]
+      priority: "high"
+
+  thursday:
+    - time: "09:30"
+      content_type: "single"
+      platforms: ["tiktok", "youtube_shorts"]
+      priority: "medium"
+    - time: "17:00"
+      content_type: "carousel"
+      platforms: ["instagram", "facebook"]
+      priority: "high"
+
+  friday:
+    - time: "12:00"
+      content_type: "single"
+      platforms: ["linkedin"]
+      priority: "medium"
+    - time: "18:00"
+      content_type: "carousel"
+      platforms: ["instagram"]
+      priority: "high"
+
+  saturday:
+    - time: "11:00"
+      content_type: "carousel"
+      platforms: ["instagram", "facebook"]
+      priority: "medium"
+
+  sunday:
+    - time: "14:00"
+      content_type: "single"
+      platforms: ["linkedin"]
+      priority: "low"
+
+# Platform-specific rules for carousel support
+platform_rules:
+  instagram:
+    carousel_support: true
+    max_carousel_images: 10
+    min_carousel_images: 2
+    optimal_carousel_frequency: "2-3 per week"
+    carousel_types: ["product_showcase", "behind_scenes", "tips_series", "portfolio"]
+
+  facebook:
+    carousel_support: true
+    max_carousel_images: 10
+    min_carousel_images: 2
+    optimal_carousel_frequency: "1-2 per week"
+    carousel_types: ["product_showcase", "customer_stories", "tips_series"]
+
+  linkedin:
+    carousel_support: false
+    max_carousel_images: 0
+    min_carousel_images: 0
+    optimal_carousel_frequency: "none"
+    carousel_types: []
+
+  tiktok:
+    carousel_support: false
+    max_carousel_images: 0
+    min_carousel_images: 0
+    optimal_carousel_frequency: "none"
+    carousel_types: []
+
+  youtube_shorts:
+    carousel_support: false
+    max_carousel_images: 0
+    min_carousel_images: 0
+    optimal_carousel_frequency: "none"
+    carousel_types: []
+
+# Content type definitions
+content_types:
+  carousel:
+    description: "Multi-image carousel post"
+    requires_multiple_assets: true
+    min_assets: 2
+    max_assets: 10
+    platforms: ["instagram", "facebook"]
+
+  single:
+    description: "Single image/video post"
+    requires_multiple_assets: false
+    min_assets: 1
+    max_assets: 1
+    platforms: ["instagram", "facebook", "linkedin", "tiktok", "youtube_shorts"]
+
+# Duplicate prevention rules
+duplicate_prevention:
+  # Avoid using the same carousel in consecutive months
+  monthly_carousel_rotation: true
+
+  # Track carousel usage by theme/type
+  track_carousel_themes: true
+
+  # Minimum days between similar content
+  min_days_between_similar: 30
+
+  # Maximum carousel reuse frequency (per quarter)
+  max_carousel_reuse_per_quarter: 1
+
+# Scheduling constraints
+constraints:
+  # Maximum posts per day per platform
+  max_posts_per_day_per_platform: 2
+
+  # Maximum carousels per week per platform
+  max_carousels_per_week_per_platform: 3
+
+  # Respect brand quiet hours (defined in brand.yaml)
+  respect_quiet_hours: true
+
+  # Buffer time between posts (minutes)
+  buffer_between_posts: 30

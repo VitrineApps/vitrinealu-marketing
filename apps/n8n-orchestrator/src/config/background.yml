@@ -1,0 +1,16 @@
+presets_enabled: true
+default_engine: diffusion
+allowed_presets:
+  - modern_garden_day
+  - sunset_patio
+  - open_plan_kitchen
+routing_rules:
+  - condition:
+      tags: ["outdoor", "garden"]
+    preset: modern_garden_day
+  - condition:
+      tags: ["evening", "patio"]
+    preset: sunset_patio
+  - condition:
+      product: "kitchen"
+    preset: open_plan_kitchen

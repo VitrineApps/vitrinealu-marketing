@@ -15,6 +15,39 @@ import { getSupabase } from '../lib/supabase.js';
 import { env } from '../config.js';
 import { enhanceJob } from './enhance.js';
 import { captionJob } from './caption.js';
+// import { runBackgroundTask } from '@vitrinealu/n8n-orchestrator';
+import { backgroundEvents } from '../events/backgroundEvents.js';
+
+// Mock runBackgroundTask until orchestrator is built
+interface BackgroundJob {
+  mediaId: string;
+  inputPath: string;
+  outputPath: string;
+  projectId: string;
+  product?: string;
+  tags: string[];
+  preset?: string;
+  overrides?: Record<string, unknown>;
+  maskPath?: string;
+  seed?: number;
+}
+
+const runBackgroundTask = async (job: BackgroundJob) => {
+  // Simulate processing
+  await new Promise(resolve => setTimeout(resolve, 100));
+  return {
+    engine: 'mock',
+    preset: 'mock-preset',
+    seed: 42,
+    artifacts: {
+      output: `https://example.com/output/${job.mediaId}.png`,
+      mask: `https://example.com/mask/${job.mediaId}.png`
+    },
+    metrics: {
+      elapsed_ms: 1000
+    }
+  };
+};
 import {
   MediaJobData,
   MediaJobResult,
@@ -25,7 +58,7 @@ import {
   ReelJobData,
   LinkedinJobData,
   CaptionJobData,
-  BufferScheduleJobData,
+  BackgroundReplaceJobData,
   hashJobSchema,
   scoreJobSchema,
   privacyBlurJobSchema,
@@ -33,7 +66,7 @@ import {
   reelJobSchema,
   linkedinJobSchema,
   captionJobSchema,
-  bufferScheduleJobSchema
+  backgroundReplaceJobSchema
 } from './types.js';
 
 type HashResult = Extract<MediaJobResult, { kind: 'hash' }>;
@@ -43,7 +76,7 @@ type CleanupResult = Extract<MediaJobResult, { kind: 'backgroundCleanup' }>;
 type ReelResult = Extract<MediaJobResult, { kind: 'videoReel' }>;
 type LinkedinResult = Extract<MediaJobResult, { kind: 'videoLinkedin' }>;
 type CaptionResult = Extract<MediaJobResult, { kind: 'caption' }>;
-type BufferScheduleResult = Extract<MediaJobResult, { kind: 'bufferSchedule' }>;
+type BackgroundReplaceResult = Extract<MediaJobResult, { kind: 'backgroundReplace' }>;
 
 const supabase = (() => {
   try {
@@ -206,40 +239,73 @@ const captionJob = async (data: CaptionJobData): Promise<CaptionResult> => {
   return { kind: 'caption', ...result };
 };
 
-const bufferScheduleJob = async (data: BufferScheduleJobData): Promise<BufferScheduleResult> => {
-  const parsed = bufferScheduleJobSchema.parse(data);
-  const token = env.BUFFER_ACCESS_TOKEN;
-  const bufferIds: string[] = [];
-  for (const post of parsed.posts) {
-    if (!token) {
-      bufferIds.push(`mock_${crypto.randomUUID()}`);
-      continue;
+const backgroundReplaceJob = async (data: BackgroundReplaceJobData): Promise<BackgroundReplaceResult> => {
+  const parsed = backgroundReplaceJobSchema.parse(data);
+  const jobId = crypto.randomUUID();
+
+  // Generate output path
+  const outputPath = `/tmp/background-${parsed.mediaId}-${Date.now()}.png`; // TODO: proper path
+
+  // Emit started event
+  backgroundEvents.emit('backgroundJobStarted', {
+    jobId,
+    mediaId: parsed.mediaId,
+    projectId: parsed.projectId,
+    inputPath: parsed.inputPath,
+    callbackUrl: parsed.callbackUrl
+  });
+
+  try {
+    // Call orchestrator
+    const result = await runBackgroundTask({
+      mediaId: parsed.mediaId,
+      inputPath: parsed.inputPath,
+      outputPath,
+      projectId: parsed.projectId,
+      product: parsed.product,
+      tags: parsed.tags || [],
+      preset: parsed.preset,
+      overrides: parsed.overrides,
+      maskPath: parsed.maskPath,
+      seed: parsed.seed
+    });
+
+    if (!result) {
+      throw new Error('Background task returned null');
     }
-    try {
-      const response = await fetch('https://api.bufferapp.com/1/updates/create.json', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: post.text,
-          profile_ids: post.profileIds,
-          now: false,
-          draft: false,
-          scheduled_at: post.scheduledAt,
-          media: post.media
-        })
-      });
-      const json = (await response.json()) as { update?: { id?: string } };
-      bufferIds.push(json.update?.id ?? `submitted_${crypto.randomUUID()}`);
-    } catch (error) {
-      logger.warn({ err: error }, 'Failed to call Buffer API, using mock id');
-      bufferIds.push(`mock_${crypto.randomUUID()}`);
-    }
+
+    // Emit success event
+    backgroundEvents.emit('backgroundJobSucceeded', {
+      jobId,
+      mediaId: parsed.mediaId,
+      projectId: parsed.projectId,
+      outputUrl: result.artifacts.output,
+      callbackUrl: parsed.callbackUrl
+    });
+
+    await logResult('background_replace', {
+      mediaId: parsed.mediaId,
+      projectId: parsed.projectId,
+      outputUrl: result.artifacts.output,
+      engine: result.engine,
+      preset: result.preset,
+      seed: result.seed,
+      elapsedMs: result.metrics.elapsed_ms
+    });
+
+    return { kind: 'backgroundReplace', jobId };
+  } catch (error) {
+    // Emit failed event
+    backgroundEvents.emit('backgroundJobFailed', {
+      jobId,
+      mediaId: parsed.mediaId,
+      projectId: parsed.projectId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      callbackUrl: parsed.callbackUrl
+    });
+
+    throw error;
   }
-  await logResult('buffer_schedule', { count: bufferIds.length });
-  return { kind: 'bufferSchedule', bufferIds };
 };
 
 export const processMediaJob = async (data: MediaJobData): Promise<MediaJobResult> => {
@@ -254,14 +320,14 @@ export const processMediaJob = async (data: MediaJobData): Promise<MediaJobResul
       return privacyJob({ fileId: data.fileId });
     case 'backgroundCleanup':
       return cleanupJob({ fileId: data.fileId, mode: data.mode, prompt: data.prompt });
+    case 'backgroundReplace':
+      return backgroundReplaceJob(data);
     case 'videoReel':
       return videoReelJob({ assetIds: data.assetIds, music: data.music, textOverlays: data.textOverlays });
     case 'videoLinkedin':
       return videoLinkedinJob({ assetIds: data.assetIds, narration: data.narration });
     case 'caption':
       return captionJob({ context: data.context, channel: data.channel });
-    case 'bufferSchedule':
-      return bufferScheduleJob({ posts: data.posts });
     default:
       throw new Error(`Unsupported job kind ${(data as { kind: string }).kind}`);
   }

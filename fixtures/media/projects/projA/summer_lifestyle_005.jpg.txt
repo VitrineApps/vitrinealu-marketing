@@ -1,0 +1,3 @@
+# Placeholder for summer_lifestyle_005.jpg
+# Landscape aspect ratio (16:9), 1920x1080px
+# EXIF Date: 2024-06-19 13:30:00

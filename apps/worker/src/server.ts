@@ -5,6 +5,7 @@ import { logger } from '@vitrinealu/shared/logger';
 import { healthRoute } from './routes/health.js';
 import { registerMediaRoutes } from './routes/api/media.js';
 import { registerApprovalRoutes } from './routes/api/approvals.js';
+import { registerBackgroundRoutes } from './routes/api/background.js';
 
 export const createServer = () => {
   const app = fastify({ logger });
@@ -13,6 +14,7 @@ export const createServer = () => {
   app.register(healthRoute);
   app.register(registerMediaRoutes);
   app.register(registerApprovalRoutes);
+  app.register(registerBackgroundRoutes);
 
   return app;
 };

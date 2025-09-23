@@ -32,7 +32,8 @@ const workerEnvSchema = z.object({
   CAPTION_MAX_HASHTAGS: z.coerce.number().default(5),
   BUFFER_ACCESS_TOKEN: z.string().optional(),
   BUFFER_PROFILE_IDS_JSON: z.string().optional(),
-  APPROVAL_SECRET: z.string().optional()
+  APPROVAL_SECRET: z.string().optional(),
+  WEBHOOK_SECRET: z.string().min(32, 'WEBHOOK_SECRET must be at least 32 characters').optional()
 });
 
 const parsed = workerEnvSchema.parse(process.env);

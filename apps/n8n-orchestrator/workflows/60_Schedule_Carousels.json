@@ -1,0 +1,226 @@
+{
+  "meta": {
+    "instanceId": "template",
+    "generatedAt": "2024-01-15T00:00:00.000Z",
+    "n8nVersion": "1.67.1"
+  },
+  "workflows": [
+    {
+      "id": "schedule-carousels-workflow",
+      "name": "60_Schedule_Carousels",
+      "active": false,
+      "nodes": [
+        {
+          "id": "weekly-scheduler-trigger",
+          "name": "Weekly Carousel Scheduler",
+          "type": "n8n-nodes-base.cron",
+          "typeVersion": 1,
+          "position": [-1260, 300],
+          "parameters": {
+            "mode": "custom",
+            "custom": {
+              "cronExpression": "0 9 * * 1"
+            }
+          }
+        },
+        {
+          "id": "compute-week-window",
+          "name": "Compute Week Window",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [-1040, 300],
+          "parameters": {
+            "functionCode": "const now = new Date();\nconst utcDay = now.getUTCDay(); // 0 = Sunday\nconst offsetToMonday = (utcDay + 6) % 7;\nconst monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));\nmonday.setUTCDate(monday.getUTCDate() - offsetToMonday);\nmonday.setUTCHours(9, 0, 0, 0);\nconst start = monday;\nconst end = new Date(start);\nend.setUTCDate(end.getUTCDate() + 7);\nreturn [{ json: {\n  weekStartISO: start.toISOString(),\n  weekEndISO: end.toISOString(),\n  weekStart: start.toISOString().split('T')[0],\n  weekEnd: end.toISOString().split('T')[0]\n}}];"
+          }
+        },
+        {
+          "id": "generate-weekly-plan",
+          "name": "Generate Weekly Plan",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [-820, 300],
+          "parameters": {
+            "method": "POST",
+            "url": "http://scheduler:8787/api/weekly-plan",
+            "sendBody": true,
+            "bodyContentType": "json",
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "weekStart",
+                  "value": "={{$node['Compute Week Window'].json['weekStartISO']}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "filter-carousel-slots",
+          "name": "Filter Carousel Slots",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [-600, 300],
+          "parameters": {
+            "functionCode": "const plan = $node['Generate Weekly Plan'].json;\nconst carouselSlots = plan.slots.filter(slot => \n  slot.contentType === 'carousel' && slot.available\n);\n\nreturn carouselSlots.map(slot => ({ json: {\n  ...slot,\n  weekStart: plan.weekStart,\n  weekEnd: plan.weekEnd\n}}));"
+          }
+        },
+        {
+          "id": "schedule-carousel-posts",
+          "name": "Schedule Carousel Posts",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [-380, 300],
+          "parameters": {
+            "method": "POST",
+            "url": "http://scheduler:8787/api/schedule-weekly-posts",
+            "sendBody": true,
+            "bodyContentType": "json",
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "weekStart",
+                  "value": "={{$node['Compute Week Window'].json['weekStartISO']}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "check-scheduled-posts",
+          "name": "Check Scheduled Posts",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [-160, 300],
+          "parameters": {
+            "functionCode": "const scheduledPosts = $node['Schedule Carousel Posts'].json;\n\nif (!scheduledPosts || scheduledPosts.length === 0) {\n  return [{ json: { message: 'No carousel posts scheduled this week' } }];\n}\n\nreturn scheduledPosts.map(post => ({ json: post }));"
+          }
+        },
+        {
+          "id": "send-approval-email",
+          "name": "Send Approval Email",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [60, 300],
+          "parameters": {
+            "method": "POST",
+            "url": "http://scheduler:8787/api/send-digest",
+            "sendBody": true,
+            "bodyContentType": "json",
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "startDate",
+                  "value": "={{$node['Compute Week Window'].json['weekStartISO']}}"
+                },
+                {
+                  "name": "endDate",
+                  "value": "={{$node['Compute Week Window'].json['weekEndISO']}}"
+                },
+                {
+                  "name": "subject",
+                  "value": "Weekly Carousel Schedule - {{formatDate($node['Compute Week Window'].json['weekStart'], 'MMM Do')}} to {{formatDate($node['Compute Week Window'].json['weekEnd'], 'MMM Do')}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "log-completion",
+          "name": "Log Completion",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [280, 300],
+          "parameters": {
+            "functionCode": "const scheduledCount = $node['Check Scheduled Posts'].json.length;\nconst weekStart = $node['Compute Week Window'].json['weekStart'];\nconst weekEnd = $node['Compute Week Window'].json['weekEnd'];\n\nconsole.log(`Carousel scheduling completed for week ${weekStart} to ${weekEnd}. Scheduled ${scheduledCount} carousel posts.`);\n\nreturn [{ json: {\n  status: 'completed',\n  weekStart,\n  weekEnd,\n  scheduledPosts: scheduledCount,\n  message: `Successfully scheduled ${scheduledCount} carousel posts for the week`\n}}];"
+          }
+        }
+      ],
+      "connections": {
+        "weekly-scheduler-trigger": {
+          "main": [
+            [
+              {
+                "node": "compute-week-window",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "compute-week-window": {
+          "main": [
+            [
+              {
+                "node": "generate-weekly-plan",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "generate-weekly-plan": {
+          "main": [
+            [
+              {
+                "node": "filter-carousel-slots",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "filter-carousel-slots": {
+          "main": [
+            [
+              {
+                "node": "schedule-carousel-posts",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "schedule-carousel-posts": {
+          "main": [
+            [
+              {
+                "node": "check-scheduled-posts",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "check-scheduled-posts": {
+          "main": [
+            [
+              {
+                "node": "send-approval-email",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "send-approval-email": {
+          "main": [
+            [
+              {
+                "node": "log-completion",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      },
+      "settings": {
+        "executionOrder": "v1"
+      },
+      "staticData": null,
+      "meta": {
+        "notes": "Weekly workflow to schedule carousel posts based on the configured schedule.yml. Runs every Monday at 9 AM UTC."
+      }
+    }
+  ]
+}

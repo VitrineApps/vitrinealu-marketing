@@ -15,7 +15,8 @@ const PostSchema = z.object({
   bufferDraftId: z.string().optional(),
   status: z.enum(['draft', 'approved', 'published', 'rejected']),
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
+  contentType: z.enum(['single', 'carousel']).default('single')
 });
 
 const ApprovalSchema = z.object({
@@ -36,9 +37,20 @@ const ChannelSchema = z.object({
   createdAt: z.date()
 });
 
+const CarouselUsageSchema = z.object({
+  id: z.string(),
+  carouselId: z.string(),
+  theme: z.string(),
+  platform: z.enum(['instagram', 'tiktok', 'youtube_shorts', 'linkedin', 'facebook']),
+  usedAt: z.date(),
+  usageCount: z.number(),
+  lastUsed: z.date()
+});
+
 export type Post = z.infer<typeof PostSchema>;
 export type Approval = z.infer<typeof ApprovalSchema>;
 export type Channel = z.infer<typeof ChannelSchema>;
+export type CarouselUsage = z.infer<typeof CarouselUsageSchema>;
 
 export class Repository {
   private db: Database.Database;
@@ -64,6 +76,7 @@ export class Repository {
         scheduled_at DATETIME NOT NULL,
         buffer_draft_id TEXT,
         status TEXT NOT NULL DEFAULT 'draft',
+        content_type TEXT NOT NULL DEFAULT 'single',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -94,14 +107,31 @@ export class Repository {
       )
     `);
 
+    // Carousel usage table for duplicate prevention
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS carousel_usage (
+        id TEXT PRIMARY KEY,
+        carousel_id TEXT NOT NULL,
+        theme TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        usage_count INTEGER DEFAULT 1,
+        last_used DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Indexes
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
       CREATE INDEX IF NOT EXISTS idx_posts_platform ON posts(platform);
       CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at);
       CREATE INDEX IF NOT EXISTS idx_posts_content_hash ON posts(content_hash);
+      CREATE INDEX IF NOT EXISTS idx_posts_content_type ON posts(content_type);
       CREATE INDEX IF NOT EXISTS idx_approvals_post_id ON approvals(post_id);
       CREATE INDEX IF NOT EXISTS idx_channels_platform ON channels(platform);
+      CREATE INDEX IF NOT EXISTS idx_carousel_usage_carousel_id ON carousel_usage(carousel_id);
+      CREATE INDEX IF NOT EXISTS idx_carousel_usage_platform ON carousel_usage(platform);
+      CREATE INDEX IF NOT EXISTS idx_carousel_usage_last_used ON carousel_usage(last_used);
     `);
   }
 
@@ -111,8 +141,8 @@ export class Repository {
     const now = new Date();
 
     const stmt = this.db.prepare(`
-      INSERT INTO posts (id, content_hash, platform, caption, hashtags, media_urls, thumbnail_url, scheduled_at, buffer_draft_id, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO posts (id, content_hash, platform, caption, hashtags, media_urls, thumbnail_url, scheduled_at, buffer_draft_id, status, content_type, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -126,6 +156,7 @@ export class Repository {
       post.scheduledAt.toISOString(),
       post.bufferDraftId,
       post.status,
+      post.contentType || 'single',
       now.toISOString(),
       now.toISOString()
     );
@@ -133,6 +164,7 @@ export class Repository {
     return {
       ...post,
       id,
+      contentType: post.contentType || 'single',
       createdAt: now,
       updatedAt: now
     };
@@ -155,6 +187,7 @@ export class Repository {
       scheduledAt: new Date(row.scheduled_at),
       bufferDraftId: row.buffer_draft_id || undefined,
       status: row.status,
+      contentType: row.content_type || 'single',
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at)
     };
@@ -175,6 +208,7 @@ export class Repository {
         scheduled_at = ?,
         buffer_draft_id = ?,
         status = ?,
+        content_type = ?,
         updated_at = ?
       WHERE id = ?
     `);
@@ -188,6 +222,7 @@ export class Repository {
       updated.scheduledAt.toISOString(),
       updated.bufferDraftId,
       updated.status,
+      updated.contentType,
       updated.updatedAt.toISOString(),
       id
     );
@@ -210,6 +245,7 @@ export class Repository {
       scheduledAt: new Date(row.scheduled_at),
       bufferDraftId: row.buffer_draft_id || undefined,
       status: row.status,
+      contentType: row.content_type || 'single',
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at)
     }));
@@ -237,6 +273,7 @@ export class Repository {
       scheduledAt: new Date(row.scheduled_at),
       bufferDraftId: row.buffer_draft_id || undefined,
       status: row.status,
+      contentType: row.content_type || 'single',
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at)
     }));
@@ -349,6 +386,131 @@ export class Repository {
     const stmt = this.db.prepare('SELECT COUNT(*) as count FROM posts WHERE content_hash = ?');
     const result = stmt.get(contentHash) as { count: number };
     return result.count > 0;
+  }
+
+  // Carousel usage operations
+  trackCarouselUsage(carouselId: string, theme: string, platform: Post['platform']): void {
+    const now = new Date();
+
+    // Check if carousel usage already exists
+    const existingStmt = this.db.prepare(`
+      SELECT id, usage_count FROM carousel_usage
+      WHERE carousel_id = ? AND platform = ?
+    `);
+    const existing = existingStmt.get(carouselId, platform) as { id: string; usage_count: number } | undefined;
+
+    if (existing) {
+      // Update existing usage
+      const updateStmt = this.db.prepare(`
+        UPDATE carousel_usage
+        SET usage_count = ?, last_used = ?, theme = ?
+        WHERE id = ?
+      `);
+      updateStmt.run(existing.usage_count + 1, now.toISOString(), theme, existing.id);
+    } else {
+      // Create new usage record
+      const id = crypto.randomUUID();
+      const insertStmt = this.db.prepare(`
+        INSERT INTO carousel_usage (id, carousel_id, theme, platform, used_at, usage_count, last_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      insertStmt.run(id, carouselId, theme, platform, now.toISOString(), 1, now.toISOString());
+    }
+  }
+
+  getCarouselUsage(carouselId: string, platform?: Post['platform']): CarouselUsage | null {
+    let stmt: any;
+    let params: any[];
+
+    if (platform) {
+      stmt = this.db.prepare('SELECT * FROM carousel_usage WHERE carousel_id = ? AND platform = ?');
+      params = [carouselId, platform];
+    } else {
+      stmt = this.db.prepare('SELECT * FROM carousel_usage WHERE carousel_id = ?');
+      params = [carouselId];
+    }
+
+    const row = stmt.get(...params) as any;
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      carouselId: row.carousel_id,
+      theme: row.theme,
+      platform: row.platform,
+      usedAt: new Date(row.used_at),
+      usageCount: row.usage_count,
+      lastUsed: new Date(row.last_used)
+    };
+  }
+
+  getRecentlyUsedCarousels(minDays: number, platform?: Post['platform']): CarouselUsage[] {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - minDays);
+
+    let stmt: any;
+    let params: any[];
+
+    if (platform) {
+      stmt = this.db.prepare(`
+        SELECT * FROM carousel_usage
+        WHERE last_used >= ? AND platform = ?
+        ORDER BY last_used DESC
+      `);
+      params = [cutoffDate.toISOString(), platform];
+    } else {
+      stmt = this.db.prepare(`
+        SELECT * FROM carousel_usage
+        WHERE last_used >= ?
+        ORDER BY last_used DESC
+      `);
+      params = [cutoffDate.toISOString()];
+    }
+
+    const rows = stmt.all(...params) as any[];
+
+    return rows.map(row => ({
+      id: row.id,
+      carouselId: row.carousel_id,
+      theme: row.theme,
+      platform: row.platform,
+      usedAt: new Date(row.used_at),
+      usageCount: row.usage_count,
+      lastUsed: new Date(row.last_used)
+    }));
+  }
+
+  getCarouselsUsedInPeriod(startDate: Date, endDate: Date, platform?: Post['platform']): CarouselUsage[] {
+    let stmt: any;
+    let params: any[];
+
+    if (platform) {
+      stmt = this.db.prepare(`
+        SELECT * FROM carousel_usage
+        WHERE used_at >= ? AND used_at < ? AND platform = ?
+        ORDER BY used_at DESC
+      `);
+      params = [startDate.toISOString(), endDate.toISOString(), platform];
+    } else {
+      stmt = this.db.prepare(`
+        SELECT * FROM carousel_usage
+        WHERE used_at >= ? AND used_at < ?
+        ORDER BY used_at DESC
+      `);
+      params = [startDate.toISOString(), endDate.toISOString()];
+    }
+
+    const rows = stmt.all(...params) as any[];
+
+    return rows.map(row => ({
+      id: row.id,
+      carouselId: row.carousel_id,
+      theme: row.theme,
+      platform: row.platform,
+      usedAt: new Date(row.used_at),
+      usageCount: row.usage_count,
+      lastUsed: new Date(row.last_used)
+    }));
   }
 
   // Close database connection

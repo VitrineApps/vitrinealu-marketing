@@ -1,0 +1,122 @@
+# Background Replacement Presets
+
+presets:
+  - name: product-studio
+    description: Clean white studio background for product photography
+    prompt: "clean white background, professional product photography, soft lighting, shadowless"
+    negative_prompt: "cluttered, messy, shadows, dirty, stained"
+    engine: stable-diffusion
+    model: runwayml/stable-diffusion-v1-5
+    guidance_scale: 7.5
+    num_inference_steps: 20
+    tags: ["product", "studio", "clean", "professional"]
+
+  - name: portrait-outdoor
+    description: Natural outdoor background for portraits
+    prompt: "beautiful outdoor park background, natural lighting, green grass, trees, sunny day"
+    negative_prompt: "urban, buildings, cars, people, artificial, indoor"
+    engine: stable-diffusion
+    model: runwayml/stable-diffusion-v1-5
+    guidance_scale: 8.0
+    num_inference_steps: 25
+    tags: ["portrait", "outdoor", "nature", "natural"]
+
+  - name: minimalist
+    description: Simple, clean minimalist backgrounds
+    prompt: "minimalist background, solid color, clean, simple, modern, geometric"
+    negative_prompt: "busy, cluttered, patterns, textures, detailed, complex"
+    engine: stable-diffusion
+    model: runwayml/stable-diffusion-v1-5
+    guidance_scale: 9.0
+    num_inference_steps: 15
+    tags: ["minimalist", "clean", "simple", "modern"]
+
+  - name: studio-gradient
+    description: Professional studio with gradient background
+    prompt: "professional photo studio, gradient background, smooth lighting, high quality"
+    negative_prompt: "harsh shadows, uneven lighting, low quality, amateur"
+    engine: stable-diffusion
+    model: runwayml/stable-diffusion-v1-5
+    guidance_scale: 7.0
+    num_inference_steps: 20
+    tags: ["studio", "gradient", "professional", "lighting"]
+
+  - name: nature-scene
+    description: Natural environment backgrounds
+    prompt: "beautiful natural landscape, forest, mountains, lake, peaceful, serene"
+    negative_prompt: "urban, man-made, buildings, roads, artificial, busy"
+    engine: stable-diffusion
+    model: runwayml/stable-diffusion-v1-5
+    guidance_scale: 8.5
+    num_inference_steps: 30
+    tags: ["nature", "landscape", "peaceful", "outdoor"]
+
+  - name: modern_garden_day
+    description: Beautiful modern garden during daytime
+    prompt: "beautiful modern garden during daytime, lush green grass, contemporary landscaping, glass house in background, sunny weather"
+    negative_prompt: "blurry, low quality, ugly, deformed, night, dark"
+    engine: stable-diffusion
+    model: runwayml/stable-diffusion-v1-5
+    guidance_scale: 7.5
+    strength: 0.8
+    style_hint: "photorealistic"
+    tags: ["garden", "modern", "daytime", "outdoor"]
+
+  - name: sunset_patio
+    description: Elegant outdoor patio at sunset
+    prompt: "elegant outdoor patio at sunset, wooden deck, string lights, mountains in distance, warm golden hour lighting"
+    negative_prompt: "blurry, low quality, ugly, deformed, daytime, bright"
+    engine: stable-diffusion
+    model: runwayml/stable-diffusion-v1-5
+    guidance_scale: 8.0
+    strength: 0.75
+    style_hint: "cinematic"
+    tags: ["patio", "sunset", "elegant", "outdoor"]
+
+  - name: open_plan_kitchen
+    description: Modern open plan kitchen
+    prompt: "modern open plan kitchen, marble countertops, stainless steel appliances, large windows, natural light"
+    negative_prompt: "blurry, low quality, ugly, deformed, cluttered, dark"
+    engine: stable-diffusion
+    model: runwayml/stable-diffusion-v1-5
+    guidance_scale: 7.0
+    strength: 0.85
+    style_hint: "interior design"
+    tags: ["kitchen", "modern", "interior", "open-plan"]
+
+# Preset routing rules (used by orchestrator)
+routing_rules:
+  - condition:
+      tags: ["product"]
+    preset: product-studio
+  - condition:
+      tags: ["portrait", "outdoor"]
+    preset: portrait-outdoor
+  - condition:
+      tags: ["minimal", "clean"]
+    preset: minimalist
+  - condition:
+      product: "professional"
+    preset: studio-gradient
+  - condition:
+      product: "nature"
+    preset: nature-scene
+
+# Engine configuration
+engines:
+  stable-diffusion:
+    default_model: runwayml/stable-diffusion-v1-5
+    requires_gpu: true
+    max_resolution: 1024
+  runway:
+    api_endpoint: https://api.runwayml.com/v1/image_generation
+    requires_api_key: true
+    max_resolution: 2048
+
+# Default settings
+defaults:
+  engine: stable-diffusion
+  guidance_scale: 7.5
+  num_inference_steps: 20
+  output_format: png
+  seed: null  # Random seed if not specified

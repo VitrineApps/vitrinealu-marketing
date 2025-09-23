@@ -95,6 +95,24 @@ services:
     networks:
       - edge
 
+  background:
+    build:
+      context: ../..
+      dockerfile: docker/services/background/Dockerfile
+    env_file:
+      - ../env/.env
+    environment:
+      - BG_REPLACE_ENGINE=${BG_REPLACE_ENGINE:-diffusion}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - edge
+
 networks:
   edge:
     driver: bridge

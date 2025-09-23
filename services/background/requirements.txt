@@ -1,0 +1,13 @@
+pillow
+numpy
+torch
+torchvision
+diffusers
+transformers
+accelerate
+safetensors
+opencv-python
+pyyaml
+httpx
+tenacity
+python-json-logger

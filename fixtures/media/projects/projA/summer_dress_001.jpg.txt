@@ -1,0 +1,8 @@
+# Placeholder for summer_dress_001.jpg
+# This file represents a JPEG image with the following specifications:
+# - Dimensions: 1080x1080px (Square aspect ratio)
+# - EXIF DateTimeOriginal: 2024-06-15 14:30:00
+# - Camera: Canon EOS R5
+# - Description: Summer dress on model, bright lighting, outdoor setting
+#
+# In a real implementation, this would be an actual JPEG file with embedded EXIF metadata.

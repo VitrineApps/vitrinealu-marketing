@@ -1,0 +1,30 @@
+{
+  "name": "Background Replace",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "enabled",
+              "value": false
+            }
+          ]
+        }
+      },
+      "name": "Background Cleanup",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [240, 300]
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {},
+  "staticData": null,
+  "meta": {
+    "instanceId": "background-replace-workflow"
+  },
+  "id": "background-replace",
+  "tags": []
+}

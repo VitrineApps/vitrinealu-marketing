@@ -3,6 +3,7 @@ import { logger } from '@vitrinealu/shared/logger';
 import { env } from './config.js';
 import { createServer } from './server.js';
 import './lib/queue.js';
+import './webhooks/background.js';
 
 const start = async () => {
   const app = createServer();
