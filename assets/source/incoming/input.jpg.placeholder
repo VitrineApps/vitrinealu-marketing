@@ -1,0 +1,16 @@
+# Background Replacement Sample Input
+
+This is a placeholder for the sample input image `input.jpg`.
+
+In a real implementation, this would be a sample image file (e.g., a product photo or portrait) that demonstrates the background replacement service.
+
+To add a real sample image:
+1. Place a JPG image file here named `input.jpg`
+2. Ensure it's a high-quality image suitable for background replacement
+3. Update the documentation to reference the actual image
+
+Example use cases:
+- Product photography with cluttered background
+- Portrait with distracting environment
+- Object isolation for catalog purposes</content>
+<parameter name="filePath">e:/my_projects/vitrinealu-marketing/fixtures/background/input.jpg.placeholder

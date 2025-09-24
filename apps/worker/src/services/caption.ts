@@ -5,7 +5,7 @@ import { env as config } from '../config.js';
 import { getLLM } from './llm.js';
 
 const Schema = z.object({
-  channel: z.enum(["instagram", "tiktok", "linkedin", "youtube"]),
+  channel: z.enum(["instagram", "tiktok", "linkedin", "youtube", "facebook"]),
   context: z.object({
     product: z.string().optional(),
     locale: z.string().optional(),
@@ -17,6 +17,7 @@ const Schema = z.object({
 });
 
 type CaptionInput = z.infer<typeof Schema>;
+export type CaptionContext = CaptionInput['context'];
 
 export async function generateCaption(
   channel: CaptionInput['channel'], 

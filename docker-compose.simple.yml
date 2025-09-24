@@ -1,0 +1,64 @@
+services:
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --serversTransport.insecureSkipVerify=true
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - edge
+
+  n8n:
+    image: n8nio/n8n:1.67.1
+    env_file:
+      - infra/env/.env
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_USER_FOLDER=/data
+      - N8N_DEFAULT_TIMEZONE=Europe/London
+      - N8N_EXECUTIONS_RETRY_COUNT=3
+      - N8N_TELEMETRY_ENABLED=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+    ports:
+      - "5678:5678"
+    user: root
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.n8n.rule=Host(`n8n.localhost`)
+      - traefik.http.routers.n8n.entrypoints=web
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
+    networks:
+      - edge
+    volumes:
+      - n8n_data:/data
+      - ./n8n/workflows:/data/workflows:ro
+
+  background:
+    image: vitrinealu-background:latest
+    env_file:
+      - infra/env/.env
+    environment:
+      - BG_REPLACE_ENGINE=diffusion
+    command: ["python", "cli.py", "--help"]
+    networks:
+      - edge
+    volumes:
+      - ./assets:/app/assets
+
+networks:
+  edge:
+    driver: bridge
+
+volumes:
+  n8n_data:

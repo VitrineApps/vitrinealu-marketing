@@ -25,11 +25,13 @@ FROM node:20-slim AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Install RealESRGAN
+# Install RealESRGAN and system dependencies
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends wget unzip ffmpeg python3 python3-pip libvulkan1 \
-  && wget -O /tmp/realesrgan.zip https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip \
-  && unzip /tmp/realesrgan.zip -d /opt \
+  && apt-get install -y --no-install-recommends \
+     wget unzip ffmpeg python3 python3-pip \
+     libvulkan1 curl ca-certificates \
+  && wget -q -O /tmp/realesrgan.zip https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip \
+  && unzip -q /tmp/realesrgan.zip -d /opt \
   && mv /opt/realesrgan-ncnn-vulkan /opt/realesrgan \
   && chmod +x /opt/realesrgan \
   && pip3 install --no-cache-dir opencv-python-headless numpy \
@@ -38,10 +40,8 @@ RUN apt-get update \
   && apt-get autoremove -y \
   && rm -rf /var/lib/apt/lists/*
 
-ARG REAL_ESRGAN_BIN_DOCKER=/tmp/dummy
-RUN touch /tmp/dummy
-COPY ${REAL_ESRGAN_BIN_DOCKER} /usr/local/bin/realesrgan-ncnn-vulkan
-RUN chmod +x /usr/local/bin/realesrgan-ncnn-vulkan
+# Create fallback RealESRGAN binary placeholder (will use the installed one)
+RUN ln -s /opt/realesrgan /usr/local/bin/realesrgan-ncnn-vulkan
 
 COPY --from=builder /repo/node_modules ./node_modules
 COPY --from=builder /repo/apps/worker/package.json ./package.json

@@ -3,7 +3,7 @@ import argparse
 import json
 import sys
 import os
-from services.background.replace_background import replace_background
+from replace_background import replace_background
 
 def main():
     parser = argparse.ArgumentParser(description="Background replacement CLI")

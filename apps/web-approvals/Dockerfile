@@ -25,6 +25,10 @@ FROM node:20-slim AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /repo/apps/web-approvals/.next/standalone ./
 COPY --from=builder /repo/apps/web-approvals/.next/static ./.next/static
 

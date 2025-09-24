@@ -3,7 +3,7 @@ FROM python:3.11-slim
 # Install system dependencies for torch and opencv
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libgl1-mesa-glx \
+    libgl1-mesa-dev \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -17,5 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy service code
 COPY services/background/ .
 
+# Set Python path
+ENV PYTHONPATH=/app
+
 # Default command
-CMD ["python", "-m", "services.background.cli", "--help"]
+CMD ["python", "cli.py", "--help"]

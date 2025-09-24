@@ -5,14 +5,17 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Install dependencies first (for better caching)
-COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN pnpm run build
+RUN npm run build
+
+# Clean up dev dependencies for smaller production image
+RUN npm ci --only=production && npm cache clean --force
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
@@ -30,4 +33,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start the application
-CMD ["pnpm", "start"]
+CMD ["npm", "start"]

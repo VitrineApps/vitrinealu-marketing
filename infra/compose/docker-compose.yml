@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   traefik:
     image: traefik:v3.1
@@ -20,9 +18,7 @@ services:
       - edge
 
   n8n:
-    build:
-      context: ../..
-      dockerfile: apps/n8n-orchestrator/Dockerfile
+    image: n8nio/n8n:1.67.1
     env_file:
       - ../env/.env
     environment:
@@ -48,6 +44,7 @@ services:
       - edge
     volumes:
       - n8n_data:/data
+      - ../../n8n/workflows:/data/workflows:ro
 
   worker:
     build:
@@ -72,6 +69,7 @@ services:
     networks:
       - edge
     volumes:
+      - ../../assets:/app/assets
       # Bind REAL_ESRGAN_BIN if using host path (e.g., for Windows: "${REAL_ESRGAN_BIN}:/usr/local/bin/realesrgan-ncnn-vulkan:ro")
       # - ${REAL_ESRGAN_BIN}:/usr/local/bin/realesrgan-ncnn-vulkan:ro
 
