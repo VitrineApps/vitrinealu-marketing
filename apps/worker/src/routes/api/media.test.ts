@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const envOverrides = vi.hoisted(() => ({
   OPENAI_API_KEY: 'test-openai',
-  BUFFER_ACCESS_TOKEN: 'test-buffer',
   GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: JSON.stringify({
     client_email: 'worker@test',
     private_key: '-----BEGIN PRIVATE KEY-----\nMII...\n-----END PRIVATE KEY-----\n'

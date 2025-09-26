@@ -1,4 +1,5 @@
 import type { Post } from '../repository.js';
+import type { WeeklyMetricsReport } from '../metrics/harvester.js';
 import { config } from '../config.js';
 import { DigestBuilder } from './digestBuilder.js';
 
@@ -7,6 +8,10 @@ export class DigestGenerator {
 
   generateDigest(posts: Post[], weekStart: Date, weekEnd: Date): string {
     return this.builder.buildHtml(posts, { weekStart, weekEnd });
+  }
+
+  generateDigestWithMetrics(posts: Post[], weekStart: Date, weekEnd: Date, metrics?: WeeklyMetricsReport): string {
+    return this.builder.buildHtmlWithMetrics(posts, { weekStart, weekEnd }, metrics);
   }
 
   generateTextDigest(posts: Post[], weekStart: Date, weekEnd: Date): string {

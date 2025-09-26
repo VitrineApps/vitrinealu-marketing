@@ -1,501 +1,6 @@
 [
   {
     "Uptime": null,
-    "Timestamp": "2025-09-24T13:15:04.5571195+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.00%",
-        "Memory": "192.5MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "30.62MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.31%",
-        "Memory": "4.559MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.79,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:16:07.4716999+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.01%",
-        "Memory": "192.3MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.77%",
-        "Memory": "30.75MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.30%",
-        "Memory": "4.559MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.63MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.79,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:17:11.1309231+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.16%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "5.56%",
-        "Memory": "30.08MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "2.94%",
-        "Memory": "4.652MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.63MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.79,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:18:14.8203557+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.03%",
-        "Memory": "192.6MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "30.39MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.29%",
-        "Memory": "4.531MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.78,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:19:17.5984169+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.00%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "30.61MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.26%",
-        "Memory": "4.785MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.78,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:20:21.2971827+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.05%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "30.64MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.22%",
-        "Memory": "4.547MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.79,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:21:24.9907276+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.04%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "6.22%",
-        "Memory": "30.76MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.26%",
-        "Memory": "4.805MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.08%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.79,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:22:27.6991753+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.06%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "30.65MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.33%",
-        "Memory": "4.562MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.78,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:23:31.3715521+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.01%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "30.72MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.49%",
-        "Memory": "4.812MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.78,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:24:35.053373+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.03%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "29.91MiB / 39.14GiB",
-        "MemoryPercent": "0.07%"
-      },
-      "837a299cbf5d": {
-        "CPU": "2.61%",
-        "Memory": "4.926MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.07%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.78,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:25:37.8585616+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.06%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "5.65%",
-        "Memory": "30.61MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.33%",
-        "Memory": "4.98MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.03%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.78,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:26:41.4645311+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.00%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "30.45MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.30%",
-        "Memory": "4.738MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.78,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:27:45.1498758+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.03%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "31.6MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.23%",
-        "Memory": "4.742MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.2,
-      "Free": 106.91,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:28:47.9873631+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.00%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.00%",
-        "Memory": "24.54MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.29%",
-        "Memory": "3.785MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.06%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.4,
-      "Free": 107.79,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
-    "Timestamp": "2025-09-24T13:29:51.6140716+01:00",
-    "Memory": null,
-    "Containers": {
-      "2aa986c2f23f": {
-        "CPU": "0.12%",
-        "Memory": "192.4MiB / 39.14GiB",
-        "MemoryPercent": "0.48%"
-      },
-      "a1ebccfd49b9": {
-        "CPU": "0.94%",
-        "Memory": "30.2MiB / 39.14GiB",
-        "MemoryPercent": "0.08%"
-      },
-      "837a299cbf5d": {
-        "CPU": "0.44%",
-        "Memory": "4.785MiB / 39.14GiB",
-        "MemoryPercent": "0.01%"
-      },
-      "6c836310a007": {
-        "CPU": "0.00%",
-        "Memory": "25.62MiB / 39.14GiB",
-        "MemoryPercent": "0.06%"
-      }
-    },
-    "Disk": {
-      "PercentFree": 23.3,
-      "Free": 107.5,
-      "Total": 460.5
-    },
-    "CPU": null
-  },
-  {
-    "Uptime": null,
     "Timestamp": "2025-09-24T13:30:55.2999592+01:00",
     "Memory": null,
     "Containers": {
@@ -3295,6 +2800,501 @@
     "Disk": {
       "PercentFree": 23.4,
       "Free": 107.74,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:00:45.7496115+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.00%",
+        "Memory": "193.6MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "33.09MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.33%",
+        "Memory": "4.57MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.74,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:01:49.4706946+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.06%",
+        "Memory": "193.6MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "33.08MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.27%",
+        "Memory": "4.57MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.79,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:02:52.4223175+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.00%",
+        "Memory": "193.6MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.56%",
+        "Memory": "26.13MiB / 39.14GiB",
+        "MemoryPercent": "0.07%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.24%",
+        "Memory": "3.613MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:03:56.1031084+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.05%",
+        "Memory": "193.6MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "29.86MiB / 39.14GiB",
+        "MemoryPercent": "0.07%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.24%",
+        "Memory": "4.371MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.11%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:04:59.780911+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.03%",
+        "Memory": "193.6MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "30.47MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.22%",
+        "Memory": "4.801MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:06:03.4405769+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.06%",
+        "Memory": "193.7MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "29.95MiB / 39.14GiB",
+        "MemoryPercent": "0.07%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.23%",
+        "Memory": "4.785MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:07:07.170004+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.05%",
+        "Memory": "193.7MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "5.26%",
+        "Memory": "30.58MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "3.00%",
+        "Memory": "4.523MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.15%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:08:10.2126334+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.04%",
+        "Memory": "193.9MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "30.52MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.22%",
+        "Memory": "4.867MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:09:13.8607427+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.00%",
+        "Memory": "193.7MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "31.85MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.25%",
+        "Memory": "5.133MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:10:17.5164785+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.05%",
+        "Memory": "193.7MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "31.88MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.22%",
+        "Memory": "4.637MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:11:20.2256475+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.04%",
+        "Memory": "193.8MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "5.63%",
+        "Memory": "31.92MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.24%",
+        "Memory": "4.652MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.03%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:12:23.8391682+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.00%",
+        "Memory": "193.8MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "33MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.25%",
+        "Memory": "4.898MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:13:27.5809739+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.00%",
+        "Memory": "193.8MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "33MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.21%",
+        "Memory": "4.922MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:14:30.2708863+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.07%",
+        "Memory": "193.8MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.49%",
+        "Memory": "33.17MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.22%",
+        "Memory": "4.66MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.00%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.78,
+      "Total": 460.5
+    },
+    "CPU": null
+  },
+  {
+    "Uptime": null,
+    "Timestamp": "2025-09-24T15:15:33.89726+01:00",
+    "Memory": null,
+    "Containers": {
+      "2aa986c2f23f": {
+        "CPU": "0.05%",
+        "Memory": "193.8MiB / 39.14GiB",
+        "MemoryPercent": "0.48%"
+      },
+      "a1ebccfd49b9": {
+        "CPU": "0.00%",
+        "Memory": "33.16MiB / 39.14GiB",
+        "MemoryPercent": "0.08%"
+      },
+      "837a299cbf5d": {
+        "CPU": "0.23%",
+        "Memory": "4.652MiB / 39.14GiB",
+        "MemoryPercent": "0.01%"
+      },
+      "6c836310a007": {
+        "CPU": "0.03%",
+        "Memory": "25.62MiB / 39.14GiB",
+        "MemoryPercent": "0.06%"
+      }
+    },
+    "Disk": {
+      "PercentFree": 23.4,
+      "Free": 107.77,
       "Total": 460.5
     },
     "CPU": null

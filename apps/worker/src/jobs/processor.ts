@@ -1,12 +1,4 @@
 import path from 'node:path';
-import crypto from 'node:crypto';
-import {
-  copyFile,
-  mkdtemp,
-  rm,
-  writeFile
-} from 'node:fs/promises';
-import { fetch } from 'undici';
 import { decode } from 'jpeg-js';
 import { logger } from '@vitrinealu/shared/logger';
 import { driveHelpers } from '../lib/drive.js';
@@ -14,40 +6,11 @@ import { computeSha256 } from '../lib/hashing.js';
 import { getSupabase } from '../lib/supabase.js';
 import { env } from '../config.js';
 import { enhanceJob } from './enhance.js';
-import { captionJob } from './caption.js';
-// import { runBackgroundTask } from '@vitrinealu/n8n-orchestrator';
+import { captionJob as captionJobImpl } from './caption.js';
 import { backgroundEvents } from '../events/backgroundEvents.js';
 
-// Mock runBackgroundTask until orchestrator is built
-interface BackgroundJob {
-  mediaId: string;
-  inputPath: string;
-  outputPath: string;
-  projectId: string;
-  product?: string;
-  tags: string[];
-  preset?: string;
-  overrides?: Record<string, unknown>;
-  maskPath?: string;
-  seed?: number;
-}
-
-const runBackgroundTask = async (job: BackgroundJob) => {
-  // Simulate processing
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return {
-    engine: 'mock',
-    preset: 'mock-preset',
-    seed: 42,
-    artifacts: {
-      output: `https://example.com/output/${job.mediaId}.png`,
-      mask: `https://example.com/mask/${job.mediaId}.png`
-    },
-    metrics: {
-      elapsed_ms: 1000
-    }
-  };
-};
+// Background task interfaces (no longer needed since we call FastAPI directly)
+// Keeping interfaces for potential future use
 import {
   MediaJobData,
   MediaJobResult,
@@ -185,18 +148,21 @@ const privacyJob = async (data: PrivacyBlurJobData): Promise<PrivacyResult> => {
 
 const cleanupJob = async (data: BackgroundCleanupJobData): Promise<CleanupResult> => {
   const parsed = backgroundCleanupJobSchema.parse(data);
-  const mode = parsed.mode ?? 'clean';
-  const suffix = mode === 'replace' ? 'background-replace' : 'background-clean';
-  const upload = await cloneFileToReady(parsed.fileId, suffix);
-  const url = upload.webContentLink ?? upload.webViewLink ?? '';
+  const { backgroundCleanupJob } = await import('./backgroundReplace.js');
+  const result = await backgroundCleanupJob(parsed);
+  
   await logResult('background_cleanup', {
     fileId: parsed.fileId,
-    newFileId: upload.id,
-    url,
-    mode,
-    prompt: parsed.prompt
+    url: result.url,
+    mode: parsed.mode ?? 'clean',
+    prompt: parsed.prompt,
+    engine: result.metadata.engine,
+    processingTimeMs: result.metadata.processingTimeMs,
+    dimensions: result.metadata.dimensions,
+    validations: result.metadata.validations,
   });
-  return { kind: 'backgroundCleanup', url };
+  
+  return { kind: 'backgroundCleanup', url: result.url };
 };
 
 const videoReelJob = async (data: ReelJobData): Promise<ReelResult> => {
@@ -232,23 +198,22 @@ const videoLinkedinJob = async (data: LinkedinJobData): Promise<LinkedinResult> 
   return { kind: 'videoLinkedin', mp4Url: url, thumbUrl };
 };
 
-const captionJob = async (data: CaptionJobData): Promise<CaptionResult> => {
+const captionJobProcessor = async (data: CaptionJobData): Promise<CaptionResult> => {
   const parsed = captionJobSchema.parse(data);
-  const result = await captionJob(parsed);
+  const result = await captionJobImpl(parsed);
   await logResult('caption', { channel: parsed.channel, caption: result.caption, hashtags: result.hashtags });
   return { kind: 'caption', ...result };
 };
 
 const backgroundReplaceJob = async (data: BackgroundReplaceJobData): Promise<BackgroundReplaceResult> => {
   const parsed = backgroundReplaceJobSchema.parse(data);
-  const jobId = crypto.randomUUID();
-
-  // Generate output path
-  const outputPath = `/tmp/background-${parsed.mediaId}-${Date.now()}.png`; // TODO: proper path
-
+  
+  // Import and use the real background replacement function
+  const { backgroundReplaceJob: realBackgroundReplaceJob } = await import('./backgroundReplace.js');
+  
   // Emit started event
   backgroundEvents.emit('backgroundJobStarted', {
-    jobId,
+    jobId: 'pending', // Will be set by the actual job
     mediaId: parsed.mediaId,
     projectId: parsed.projectId,
     inputPath: parsed.inputPath,
@@ -256,48 +221,31 @@ const backgroundReplaceJob = async (data: BackgroundReplaceJobData): Promise<Bac
   });
 
   try {
-    // Call orchestrator
-    const result = await runBackgroundTask({
-      mediaId: parsed.mediaId,
-      inputPath: parsed.inputPath,
-      outputPath,
-      projectId: parsed.projectId,
-      product: parsed.product,
-      tags: parsed.tags || [],
-      preset: parsed.preset,
-      overrides: parsed.overrides,
-      maskPath: parsed.maskPath,
-      seed: parsed.seed
-    });
-
-    if (!result) {
-      throw new Error('Background task returned null');
-    }
+    const result = await realBackgroundReplaceJob(parsed);
 
     // Emit success event
     backgroundEvents.emit('backgroundJobSucceeded', {
-      jobId,
+      jobId: result.jobId,
       mediaId: parsed.mediaId,
       projectId: parsed.projectId,
-      outputUrl: result.artifacts.output,
+      outputUrl: result.metadata.outputUrl,
       callbackUrl: parsed.callbackUrl
     });
 
     await logResult('background_replace', {
+      jobId: result.jobId,
       mediaId: parsed.mediaId,
       projectId: parsed.projectId,
-      outputUrl: result.artifacts.output,
-      engine: result.engine,
-      preset: result.preset,
-      seed: result.seed,
-      elapsedMs: result.metrics.elapsed_ms
+      outputUrl: result.metadata.outputUrl,
+      engine: result.metadata.engine,
+      processingTimeMs: result.metadata.processingTimeMs,
     });
 
-    return { kind: 'backgroundReplace', jobId };
+    return { kind: 'backgroundReplace', jobId: result.jobId };
   } catch (error) {
     // Emit failed event
     backgroundEvents.emit('backgroundJobFailed', {
-      jobId,
+      jobId: 'unknown',
       mediaId: parsed.mediaId,
       projectId: parsed.projectId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -327,7 +275,7 @@ export const processMediaJob = async (data: MediaJobData): Promise<MediaJobResul
     case 'videoLinkedin':
       return videoLinkedinJob({ assetIds: data.assetIds, narration: data.narration });
     case 'caption':
-      return captionJob({ context: data.context, channel: data.channel });
+      return captionJobProcessor({ context: data.context, channel: data.channel });
     default:
       throw new Error(`Unsupported job kind ${(data as { kind: string }).kind}`);
   }

@@ -3,6 +3,38 @@ import { CarouselDraftInput, CarouselDraftResult } from './types';
 import pRetry from 'p-retry';
 import pino from 'pino';
 
+// Enhanced types for multi-image carousel support
+export interface MediaItem {
+  url: string;
+  type?: 'image' | 'video';
+  thumbnail?: string;
+  alt_text?: string;
+}
+
+export interface CarouselBufferPayload {
+  profile_ids: string[];
+  text: string;
+  media: {
+    photos: MediaItem[];
+  };
+  scheduled_at?: number;
+  link?: string;
+  shorten?: boolean;
+}
+
+export interface BufferResponse {
+  update: {
+    id: string;
+    media_attachments?: Array<{
+      id: string;
+      url: string;
+      type: string;
+    }>;
+    service: string;
+    status: string;
+  };
+}
+
 // Error classes
 export class RateLimitError extends Error {
   retryAfter?: number;
@@ -36,28 +68,43 @@ const PLATFORM_TEXT_LIMITS: Record<string, number> = {
 
 export async function createCarouselDraft(input: CarouselDraftInput): Promise<CarouselDraftResult> {
   const minImages = Number(process.env.CAROUSEL_MIN_IMAGES || config.config.CAROUSEL_MIN_IMAGES || 2);
-  const maxImages = Number(process.env.CAROUSEL_MAX_IMAGES || config.config.CAROUSEL_MAX_IMAGES || 5);
-  if (!Array.isArray(input.mediaUrls) || input.mediaUrls.length < minImages || input.mediaUrls.length > maxImages) {
-    throw new ValidationError(`Carousel must have between ${minImages} and ${maxImages} images`);
+  const maxImages = Number(process.env.CAROUSEL_MAX_IMAGES || config.config.CAROUSEL_MAX_IMAGES || 10); // Buffer supports up to 10
+  
+  // Validate input
+  if (!Array.isArray(input.mediaUrls) || input.mediaUrls.length < minImages) {
+    throw new ValidationError(`Carousel must have at least ${minImages} images`);
+  }
+  if (input.mediaUrls.length > maxImages) {
+    throw new ValidationError(`Carousel cannot have more than ${maxImages} images (Buffer limit)`);
   }
   if (!['instagram', 'facebook'].includes(input.platform)) {
-    throw new ValidationError('Platform must be instagram or facebook');
+    throw new ValidationError('Carousel platform must be instagram or facebook');
   }
+  
   const textLimit = PLATFORM_TEXT_LIMITS[input.platform];
   if (input.text.length > textLimit) {
-    throw new ValidationError(`Text exceeds platform limit (${textLimit})`);
+    throw new ValidationError(`Caption exceeds platform limit: ${input.text.length}/${textLimit} characters`);
   }
+  
   const baseUrl = process.env.BUFFER_BASE_URL || config.config.BUFFER_BASE_URL || 'https://api.buffer.com/2/';
   const accessToken = process.env.BUFFER_ACCESS_TOKEN || config.config.BUFFER_ACCESS_TOKEN;
   if (!accessToken) throw new ValidationError('Missing BUFFER_ACCESS_TOKEN');
   const timeout = Number(process.env.HTTP_TIMEOUT_MS || config.config.HTTP_TIMEOUT_MS || 15000);
 
-  const payload: any = {
+  // Create enhanced payload with proper media array structure
+  const payload: CarouselBufferPayload = {
     profile_ids: [input.channelId],
     text: input.text,
-    media: { photos: input.mediaUrls.map(url => ({ url })) },
+    media: { 
+      photos: input.mediaUrls.map((url, index) => ({
+        url,
+        type: 'image',
+        alt_text: `Image ${index + 1} of ${input.mediaUrls.length}`
+      }))
+    },
     ...(input.scheduledAt && { scheduled_at: Math.floor(new Date(input.scheduledAt).getTime() / 1000) }),
     ...(input.link && { link: input.link }),
+    shorten: false // Don't shorten URLs in carousel posts
   };
 
   const url = `${baseUrl.replace(/\/$/, '')}/updates/create.json`;
@@ -109,12 +156,23 @@ export async function createCarouselDraft(input: CarouselDraftInput): Promise<Ca
       logger.error({ msg: 'API error', status: res.status, errBody: redact(errBody) });
   throw (pRetry as any).abort(new ApiError(errBody, res.status));
     }
-    const data: any = await res.json();
-    // Buffer v2: { update: { id, media_attachments, service } }
+    const data = await res.json() as BufferResponse;
+    
+    // Validate Buffer response structure
     if (!data.update || !data.update.id) {
-      logger.error({ msg: 'Malformed response', data });
-  throw (pRetry as any).abort(new ApiError('Malformed response', 500));
+      logger.error({ msg: 'Malformed Buffer response', data });
+      throw (pRetry as any).abort(new ApiError('Malformed response from Buffer API', 500));
     }
+
+    // Log successful carousel creation
+    logger.info({
+      msg: 'Carousel draft created successfully',
+      updateId: data.update.id,
+      platform: data.update.service || input.platform,
+      mediaCount: input.mediaUrls.length,
+      status: data.update.status
+    });
+
     return {
       updateId: data.update.id,
       mediaIds: (data.update.media_attachments || []).map((m: any) => m.id).filter(Boolean),

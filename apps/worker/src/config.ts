@@ -33,7 +33,9 @@ const workerEnvSchema = z.object({
   BUFFER_ACCESS_TOKEN: z.string().optional(),
   BUFFER_PROFILE_IDS_JSON: z.string().optional(),
   APPROVAL_SECRET: z.string().optional(),
-  WEBHOOK_SECRET: z.string().min(32, 'WEBHOOK_SECRET must be at least 32 characters').optional()
+  WEBHOOK_SECRET: z.string().min(32, 'WEBHOOK_SECRET must be at least 32 characters').optional(),
+  ENHANCE_SERVICE_URL: z.string().default('http://localhost:8000'),
+  RUNWAY_API_KEY: z.string().optional()
 });
 
 const parsed = workerEnvSchema.parse(process.env);
@@ -43,8 +45,13 @@ export const env = {
   ...parsed
 };
 
-await fs.mkdir(env.GOOGLE_DRIVE_CACHE_DIR, { recursive: true });
-await fs.mkdir(path.dirname(env.AESTHETIC_MODEL_PATH), { recursive: true });
+// Initialize directories
+(async () => {
+  await fs.mkdir(env.GOOGLE_DRIVE_CACHE_DIR, { recursive: true });
+  await fs.mkdir(path.dirname(env.AESTHETIC_MODEL_PATH), { recursive: true });
+})().catch((err: Error) => {
+  logger.error({ err }, 'Failed to create directories');
+});
 
 logger.info(
   {

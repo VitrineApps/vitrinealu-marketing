@@ -1,6 +1,5 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodSchema } from 'zod';
-import { schedulePosts, type PostData } from '../../services/schedule.js';
 import {
   MediaJobResult,
   hashJobSchema,
@@ -11,7 +10,6 @@ import {
   reelJobSchema,
   linkedinJobSchema,
   captionJobSchema,
-  bufferScheduleJobSchema
 } from '../../jobs/types.js';
 
 const parseOrReply = <T>(schema: ZodSchema<T>, payload: unknown, reply: FastifyReply): T | undefined => {
@@ -93,12 +91,5 @@ export const registerMediaRoutes = async (app: FastifyInstance) => {
     return reply.status(200).send({ caption: result.caption, hashtags: result.hashtags });
   });
 
-  app.post('/schedule/buffer', async (request, reply) => {
-    const posts = request.body as PostData[];
-    if (!Array.isArray(posts)) {
-      return reply.status(400).send({ error: 'Expected array of posts' });
-    }
-    const results = await schedulePosts(posts);
-    return reply.status(200).send({ ids: results.map(r => r.bufferId) });
-  });
+  // Buffer integration is now owned by Scheduler. This route is retired per Plan V2.
 };

@@ -85,5 +85,5 @@ export type MediaJobResult =
   | { kind: 'backgroundReplace'; jobId: string }
   | { kind: 'videoReel'; mp4Url: string; thumbUrl: string }
   | { kind: 'videoLinkedin'; mp4Url: string; thumbUrl: string }
-  | { kind: 'caption'; caption: string; hashtags: string[] }
+  | { kind: 'caption'; text: string; hashtags: string[]; cta?: string }
   | { kind: 'bufferSchedule'; bufferIds: string[] };

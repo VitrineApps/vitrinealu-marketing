@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { Repository } from './repository.js';
 import { BufferClient } from './bufferClient.js';
 import { DigestGenerator } from './email/digest.js';
+import { MetricsHarvester } from './metrics/harvester.js';
 import { mailer } from './mailer.js';
 import { config } from './config.js';
 import { logger } from './logger.js';
@@ -10,12 +11,14 @@ export class CronScheduler {
   private repository: Repository;
   private bufferClient: BufferClient;
   private digestGenerator: DigestGenerator;
+  private metricsHarvester: MetricsHarvester;
   private jobs: Map<string, cron.ScheduledTask> = new Map();
 
   constructor(repository: Repository, bufferClient: BufferClient, digestGenerator: DigestGenerator) {
     this.repository = repository;
     this.bufferClient = bufferClient;
     this.digestGenerator = digestGenerator;
+    this.metricsHarvester = new MetricsHarvester();
   }
 
   /**
@@ -24,6 +27,7 @@ export class CronScheduler {
   start(): void {
     this.scheduleWeeklyDigest();
     this.schedulePublishApproved();
+    this.scheduleWeeklyMetricsHarvest();
     logger.info('Cron scheduler started');
   }
 
@@ -90,7 +94,7 @@ export class CronScheduler {
         logger.info('Running publish approved job');
 
         // Get approved posts that are scheduled for publishing
-        const approvedPosts = this.repository.listPostsByStatus('approved', 10); // Limit to 10 at a time
+        const approvedPosts = this.repository.listPostsByStatus('APPROVED', 10); // Limit to 10 at a time
 
         if (approvedPosts.length === 0) {
           return;
@@ -116,7 +120,7 @@ export class CronScheduler {
             await this.bufferClient.scheduleDraft(post.bufferDraftId);
 
             // Update post status
-            this.repository.updatePostStatus(post.id, 'published');
+            this.repository.updatePostStatus(post.id, 'PUBLISHED');
 
             publishedCount++;
             logger.info(`Published post ${post.id} to ${post.platform}`);
@@ -140,6 +144,37 @@ export class CronScheduler {
 
     this.jobs.set('publish-approved', job);
     logger.info('Scheduled publish approved job (every 15 minutes)');
+  }
+
+  /**
+   * Schedule weekly metrics harvest (every Sunday at 6 PM)
+   */
+  private scheduleWeeklyMetricsHarvest(): void {
+    const job = cron.schedule('0 18 * * 0', async () => {
+      try {
+        logger.info('Running weekly metrics harvest job');
+
+        // Harvest metrics for the past week
+        const report = await this.metricsHarvester.harvestWeeklyMetrics();
+
+        logger.info('Weekly metrics harvest completed', {
+          totalPosts: report.totalPosts,
+          avgEngagement: report.avgEngagementRate,
+          topPlatform: report.platformBreakdown[0]?.platform || 'none'
+        });
+
+        // TODO: Optionally send metrics summary email
+        // This could be integrated with the digest email
+
+      } catch (error) {
+        logger.error('Weekly metrics harvest job failed:', error);
+      }
+    }, {
+      timezone: config.brandConfig.timezone
+    });
+
+    this.jobs.set('weekly-metrics', job);
+    logger.info('Scheduled weekly metrics harvest job (Sunday 6 PM)');
   }
 
   /**
@@ -176,7 +211,7 @@ export class CronScheduler {
   async triggerPublish(): Promise<void> {
     logger.info('Manually triggering publish job');
 
-    const approvedPosts = this.repository.listPostsByStatus('approved', 10);
+    const approvedPosts = this.repository.listPostsByStatus('APPROVED', 10);
     let publishedCount = 0;
 
     for (const post of approvedPosts) {
@@ -192,7 +227,7 @@ export class CronScheduler {
 
       try {
         await this.bufferClient.scheduleDraft(post.bufferDraftId);
-        this.repository.updatePostStatus(post.id, 'published');
+        this.repository.updatePostStatus(post.id, 'PUBLISHED');
         publishedCount++;
         logger.info(`Published post ${post.id} to ${post.platform}`);
       } catch (error) {
@@ -204,6 +239,28 @@ export class CronScheduler {
   }
 
   /**
+   * Manually trigger metrics harvest (for testing)
+   */
+    async triggerMetricsHarvest(): Promise<any> {
+    logger.info('Manually triggering metrics harvest');
+
+    try {
+      const report = await this.metricsHarvester.harvestWeeklyMetrics();
+      
+      logger.info('Manual metrics harvest completed', {
+        totalPosts: report.totalPosts,
+        avgEngagement: report.avgEngagementRate,
+        insights: report.insights.length
+      });
+
+      return report;
+    } catch (error) {
+      logger.error('Manual metrics harvest failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get status of all jobs
    */
   getJobStatus(): Record<string, boolean> {
@@ -212,5 +269,13 @@ export class CronScheduler {
       status[name] = true; // Jobs are scheduled if they exist
     }
     return status;
+  }
+
+  /**
+   * Close resources
+   */
+  close(): void {
+    this.stop();
+    this.metricsHarvester.close();
   }
 }

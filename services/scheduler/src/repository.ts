@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
 import path from 'path';
 
-export type PostStatus = 'draft' | 'pending_approval' | 'approved' | 'scheduled' | 'published' | 'rejected';
+export type PostStatus = 'DRAFT' | 'APPROVED' | 'REJECTED' | 'PUBLISHED' | 'draft' | 'approved' | 'rejected' | 'published' | 'pending_approval';
 
 export interface Post {
   id: string;
@@ -12,11 +12,14 @@ export interface Post {
   platform: string;
   status: PostStatus;
   bufferDraftId?: string | null;
+  buffer_draft_ids?: any; // JSONB field for new format
   caption: string;
   hashtags: string[];
   mediaUrls: string[];
   thumbnailUrl?: string | null;
   scheduledAt: Date;
+  approved_at?: Date | null;
+  approved_by?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -183,11 +186,239 @@ export class Repository {
   getPostsForDigest(start: Date, end: Date): Post[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM posts WHERE status = 'pending_approval' AND scheduled_at BETWEEN @start AND @end ORDER BY scheduled_at ASC"
+        "SELECT * FROM posts WHERE status = 'DRAFT' AND scheduled_at BETWEEN @start AND @end ORDER BY scheduled_at ASC"
       )
       .all({ start: start.toISOString(), end: end.toISOString() });
     return rows.map((row) => this.mapPost(row));
   }
+
+  updatePost(id: string, updates: Partial<Pick<Post, 'buffer_draft_ids' | 'approved_at' | 'approved_by' | 'status'>>): boolean {
+    const setClauses: string[] = [];
+    const params: Record<string, any> = { id };
+
+    if (updates.buffer_draft_ids !== undefined) {
+      setClauses.push('buffer_draft_ids = @buffer_draft_ids');
+      params.buffer_draft_ids = typeof updates.buffer_draft_ids === 'string' 
+        ? updates.buffer_draft_ids 
+        : JSON.stringify(updates.buffer_draft_ids);
+    }
+
+    if (updates.approved_at !== undefined) {
+      setClauses.push('approved_at = @approved_at');
+      params.approved_at = updates.approved_at ? updates.approved_at.toISOString() : null;
+    }
+
+    if (updates.approved_by !== undefined) {
+      setClauses.push('approved_by = @approved_by');
+      params.approved_by = updates.approved_by;
+    }
+
+    if (updates.status !== undefined) {
+      setClauses.push('status = @status');
+      params.status = updates.status;
+    }
+
+    if (setClauses.length === 0) {
+      return false;
+    }
+
+    setClauses.push('updated_at = CURRENT_TIMESTAMP');
+
+    const sql = `UPDATE posts SET ${setClauses.join(', ')} WHERE id = @id`;
+    const result = this.db.prepare(sql).run(params);
+    return result.changes > 0;
+  }
+
+  createApproval(data: {
+    postId: string;
+    action: string;
+    approvedBy: string;
+    notes?: string;
+  }): ApprovalRecord {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        'INSERT INTO approvals (id, post_id, action, actor, comment, created_at) VALUES (@id, @postId, @action, @actor, @comment, @createdAt)'
+      )
+      .run({
+        id,
+        postId: data.postId,
+        action: data.action,
+        actor: data.approvedBy,
+        comment: data.notes ?? null,
+        createdAt: now,
+      });
+    return {
+      id,
+      postId: data.postId,
+      action: data.action as 'approve' | 'reject',
+      actor: data.approvedBy,
+      comment: data.notes ?? null,
+      createdAt: new Date(now),
+    };
+  }
+
+  // Post metrics methods
+  insertPostMetrics(data: {
+    postId: string;
+    platform: string;
+    metrics: Record<string, any>;
+    fetchedAt?: Date;
+  }): void {
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO post_metrics (post_id, platform, metrics, fetched_at) VALUES (@postId, @platform, @metrics, @fetchedAt)'
+      )
+      .run({
+        postId: data.postId,
+        platform: data.platform,
+        metrics: JSON.stringify(data.metrics),
+        fetchedAt: (data.fetchedAt || new Date()).toISOString(),
+      });
+  }
+
+  getPostMetrics(postId: string): Array<{
+    platform: string;
+    metrics: Record<string, any>;
+    fetchedAt: Date;
+  }> {
+    const rows = this.db
+      .prepare('SELECT platform, metrics, fetched_at FROM post_metrics WHERE post_id = @postId ORDER BY fetched_at DESC')
+      .all({ postId });
+    
+    return (rows as any[]).map((row: any) => ({
+      platform: row.platform,
+      metrics: JSON.parse(row.metrics),
+      fetchedAt: new Date(row.fetched_at),
+    }));
+  }
+
+  getRecentPostsForMetrics(daysBack: number = 7): Post[] {
+    const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+    const rows = this.db
+      .prepare("SELECT * FROM posts WHERE status = 'PUBLISHED' AND scheduled_at >= @since ORDER BY scheduled_at DESC")
+      .all({ since });
+    return rows.map((row) => this.mapPost(row));
+  }
+
+    // Get published posts in a date range for metrics harvesting
+    getPublishedPostsInRange(start: Date, end: Date): Post[] {
+      const rows = this.db
+        .prepare("SELECT * FROM posts WHERE status = 'PUBLISHED' AND scheduled_at >= @start AND scheduled_at <= @end ORDER BY scheduled_at DESC")
+        .all({ 
+          start: start.toISOString(), 
+          end: end.toISOString() 
+        });
+      return rows.map((row) => this.mapPost(row));
+    }
+
+    // Store post metrics using existing insertPostMetrics
+    storePostMetrics(metrics: {
+      postId: string;
+      platform: string;
+      views: number;
+      likes: number;
+      comments: number;
+      shares: number;
+      clicks: number;
+      impressions: number;
+      reach: number;
+      engagementRate: number;
+      clickThroughRate: number;
+      collectedAt: Date;
+    }): void {
+      this.insertPostMetrics({
+        postId: metrics.postId,
+        platform: metrics.platform,
+        metrics: {
+          views: metrics.views,
+          likes: metrics.likes,
+          comments: metrics.comments,
+          shares: metrics.shares,
+          clicks: metrics.clicks,
+          impressions: metrics.impressions,
+          reach: metrics.reach,
+          engagementRate: metrics.engagementRate,
+          clickThroughRate: metrics.clickThroughRate
+        },
+        fetchedAt: metrics.collectedAt
+      });
+    }
+
+    // Store weekly metrics report
+    storeWeeklyReport(report: {
+      weekStart: Date;
+      weekEnd: Date;
+      totalPosts: number;
+      totalViews: number;
+      totalLikes: number;
+      totalComments: number;
+      totalShares: number;
+      totalClicks: number;
+      totalImpressions: number;
+      totalReach: number;
+      avgEngagementRate: number;
+      avgClickThroughRate: number;
+      insights: string[];
+      generatedAt: Date;
+    }): void {
+      const id = randomUUID();
+      this.db
+        .prepare(`
+          INSERT OR REPLACE INTO weekly_reports 
+          (id, week_start, week_end, total_posts, total_views, total_likes, 
+           total_comments, total_shares, total_clicks, total_impressions, 
+           total_reach, avg_engagement_rate, avg_click_through_rate, insights, generated_at)
+          VALUES (@id, @weekStart, @weekEnd, @totalPosts, @totalViews, @totalLikes,
+                  @totalComments, @totalShares, @totalClicks, @totalImpressions,
+                  @totalReach, @avgEngagementRate, @avgClickThroughRate, @insights, @generatedAt)
+        `)
+        .run({
+          id,
+          weekStart: report.weekStart.toISOString(),
+          weekEnd: report.weekEnd.toISOString(),
+          totalPosts: report.totalPosts,
+          totalViews: report.totalViews,
+          totalLikes: report.totalLikes,
+          totalComments: report.totalComments,
+          totalShares: report.totalShares,
+          totalClicks: report.totalClicks,
+          totalImpressions: report.totalImpressions,
+          totalReach: report.totalReach,
+          avgEngagementRate: report.avgEngagementRate,
+          avgClickThroughRate: report.avgClickThroughRate,
+          insights: JSON.stringify(report.insights),
+          generatedAt: report.generatedAt.toISOString()
+        });
+    }
+
+    // Get post metrics in date range
+    getPostMetricsInRange(start: Date, end: Date): Array<{
+      postId: string;
+      platform: string;
+      metrics: Record<string, any>;
+      fetchedAt: Date;
+    }> {
+      const rows = this.db
+        .prepare(`
+          SELECT post_id, platform, metrics, fetched_at 
+          FROM post_metrics 
+          WHERE fetched_at >= @start AND fetched_at <= @end 
+          ORDER BY fetched_at DESC
+        `)
+        .all({ 
+          start: start.toISOString(), 
+          end: end.toISOString() 
+        });
+    
+      return (rows as any[]).map((row: any) => ({
+        postId: row.post_id,
+        platform: row.platform,
+        metrics: JSON.parse(row.metrics),
+        fetchedAt: new Date(row.fetched_at),
+      }));
+    }
 
   recordApproval(postId: string, action: 'approve' | 'reject', actor?: string, comment?: string): ApprovalRecord {
     const id = randomUUID();
@@ -288,6 +519,7 @@ export class Repository {
   }
 
   private initializeSchema(): void {
+    // First create the basic schema
     this.db.exec(
       'CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, source_path TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);' +
         'CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, asset_id TEXT, content_hash TEXT, content_type TEXT, platform TEXT NOT NULL, status TEXT NOT NULL, buffer_draft_id TEXT, caption TEXT, hashtags TEXT, media_urls TEXT, thumbnail_url TEXT, scheduled_at TIMESTAMP NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);' +
@@ -296,6 +528,70 @@ export class Repository {
         'CREATE TABLE IF NOT EXISTS approvals (id TEXT PRIMARY KEY, post_id TEXT NOT NULL, action TEXT NOT NULL, actor TEXT, comment TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);' +
         'CREATE TABLE IF NOT EXISTS carousel_usage (id TEXT PRIMARY KEY, carousel_hash TEXT NOT NULL, theme TEXT, platform TEXT NOT NULL, used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);'
     );
+
+    // Add new columns if they don't exist (for backwards compatibility)
+    try {
+      this.db.exec('ALTER TABLE posts ADD COLUMN buffer_draft_ids TEXT DEFAULT "[]";');
+    } catch (e) {
+      // Column already exists or other error - ignore
+    }
+    try {
+      this.db.exec('ALTER TABLE posts ADD COLUMN approved_at TIMESTAMP;');
+    } catch (e) {
+      // Column already exists or other error - ignore
+    }
+    try {
+      this.db.exec('ALTER TABLE posts ADD COLUMN approved_by TEXT;');
+    } catch (e) {
+      // Column already exists or other error - ignore
+    }
+
+    // Create metrics table
+    this.db.exec(
+      'CREATE TABLE IF NOT EXISTS post_metrics (' +
+        'id INTEGER PRIMARY KEY AUTOINCREMENT, ' +
+        'post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE, ' +
+        'platform TEXT NOT NULL, ' +
+        'metrics TEXT NOT NULL DEFAULT "{}", ' +
+        'fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, ' +
+        'UNIQUE(post_id, platform, fetched_at)' +
+      ');'
+    );
+    
+    // Create indexes for metrics
+    this.db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_post_metrics_post_id ON post_metrics(post_id);' +
+      'CREATE INDEX IF NOT EXISTS idx_post_metrics_platform ON post_metrics(platform);' +
+      'CREATE INDEX IF NOT EXISTS idx_post_metrics_fetched_at ON post_metrics(fetched_at);'
+    );
+
+      // Create weekly reports table
+      this.db.exec(
+        'CREATE TABLE IF NOT EXISTS weekly_reports (' +
+          'id TEXT PRIMARY KEY, ' +
+          'week_start DATE NOT NULL, ' +
+          'week_end DATE NOT NULL, ' +
+          'total_posts INTEGER NOT NULL DEFAULT 0, ' +
+          'total_views INTEGER NOT NULL DEFAULT 0, ' +
+          'total_likes INTEGER NOT NULL DEFAULT 0, ' +
+          'total_comments INTEGER NOT NULL DEFAULT 0, ' +
+          'total_shares INTEGER NOT NULL DEFAULT 0, ' +
+          'total_clicks INTEGER NOT NULL DEFAULT 0, ' +
+          'total_impressions INTEGER NOT NULL DEFAULT 0, ' +
+          'total_reach INTEGER NOT NULL DEFAULT 0, ' +
+          'avg_engagement_rate REAL NOT NULL DEFAULT 0.0, ' +
+          'avg_click_through_rate REAL NOT NULL DEFAULT 0.0, ' +
+          'insights TEXT NOT NULL DEFAULT "[]", ' +
+          'generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, ' +
+          'UNIQUE(week_start, week_end)' +
+        ');'
+      );
+    
+      // Create indexes for weekly reports
+      this.db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_weekly_reports_week_start ON weekly_reports(week_start);' +
+        'CREATE INDEX IF NOT EXISTS idx_weekly_reports_generated_at ON weekly_reports(generated_at);'
+      );
   }
 
   private ensureAsset(assetId: string): void {
@@ -313,11 +609,14 @@ export class Repository {
     platform: row.platform,
     status: row.status,
     bufferDraftId: row.buffer_draft_id ?? null,
+    buffer_draft_ids: row.buffer_draft_ids ? JSON.parse(row.buffer_draft_ids) : null,
     caption: row.caption ?? '',
     hashtags: row.hashtags ? JSON.parse(row.hashtags) : [],
     mediaUrls: row.media_urls ? JSON.parse(row.media_urls) : [],
     thumbnailUrl: row.thumbnail_url ?? null,
     scheduledAt: new Date(row.scheduled_at),
+    approved_at: row.approved_at ? new Date(row.approved_at) : null,
+    approved_by: row.approved_by ?? null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   });

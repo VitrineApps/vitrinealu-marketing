@@ -1,5 +1,6 @@
 import type { BrandConfig } from '../config.js';
 import type { Post } from '../repository.js';
+import type { WeeklyMetricsReport } from '../metrics/harvester.js';
 import { config } from '../config.js';
 
 export interface DigestContext {
@@ -58,6 +59,56 @@ export class DigestBuilder {
     ].join('');
   }
 
+  buildHtmlWithMetrics(posts: Post[], context: DigestContext, metrics?: WeeklyMetricsReport): string {
+    const timezone = this.brand.timezone ?? config.config.TIMEZONE;
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+
+    const statsSection = this.renderStats(posts, context, dateFormatter);
+    const metricsSection = metrics ? this.renderMetrics(metrics) : '';
+    const postsHtml = posts
+      .map((post) => this.renderPost(post, formatter))
+      .join('');
+
+    const brandName = this.brand.name ?? 'VitrineAlu';
+
+    return [
+      '<!DOCTYPE html>',
+      '<html lang="en">',
+      '<head>',
+      '<meta charset="UTF-8">',
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+      '<title>' + this.escapeHtml(brandName) + ' Digest</title>',
+      '<style>' + this.styles() + '</style>',
+      '</head>',
+      '<body>',
+      '<div class="container">',
+      '<header class="header">',
+      '<h1>' + this.escapeHtml(brandName) + ' Weekly Digest</h1>',
+      '<p>Review and approve the upcoming posts</p>',
+      '</header>',
+      statsSection,
+      metricsSection,
+      postsHtml,
+      '<footer class="footer">',
+      '<p>Sent from the VitrineAlu scheduler</p>',
+      '</footer>',
+      '</div>',
+      '</body>',
+      '</html>',
+    ].join('');
+  }
+
   buildText(posts: Post[], context: DigestContext): string {
     const timezone = this.brand.timezone ?? config.config.TIMEZONE;
     const formatter = new Intl.DateTimeFormat('en-GB', {
@@ -94,6 +145,40 @@ export class DigestBuilder {
       '<h2>Schedule Overview</h2>',
       '<p><strong>' + posts.length + '</strong> posts across <strong>' + platformCount + '</strong> platforms.</p>',
       '<p>Week: ' + this.escapeHtml(weekStart) + ' - ' + this.escapeHtml(weekEnd) + '</p>',
+      '</section>',
+    ].join('');
+  }
+
+  private renderMetrics(metrics: WeeklyMetricsReport): string {
+      const totalPosts = metrics.totalPosts;
+      const totalViews = metrics.totalViews;
+      const totalLikes = metrics.totalLikes;
+      const avgEngagement = metrics.avgEngagementRate;
+      const topPlatform = metrics.platformBreakdown[0];
+
+    return [
+      '<section class="metrics">',
+        '<h2>📊 Last Week Performance</h2>',
+        '<div class="metrics-grid">',
+        '<div class="metric">',
+        '<div class="metric-value">' + totalPosts + '</div>',
+        '<div class="metric-label">Posts Published</div>',
+        '</div>',
+        '<div class="metric">',
+        '<div class="metric-value">' + totalViews.toLocaleString() + '</div>',
+        '<div class="metric-label">Total Views</div>',
+        '</div>',
+        '<div class="metric">',
+        '<div class="metric-value">' + totalLikes.toLocaleString() + '</div>',
+        '<div class="metric-label">Total Likes</div>',
+        '</div>',
+        '<div class="metric">',
+        '<div class="metric-value">' + avgEngagement.toFixed(1) + '%</div>',
+        '<div class="metric-label">Avg Engagement</div>',
+        '</div>',
+        '</div>',
+        topPlatform ? '<p class="top-platform">🏆 Best performing platform: <strong>' + topPlatform.platform.toUpperCase() + '</strong> (' + topPlatform.avgEngagement.toFixed(1) + '% engagement)</p>' : '',
+        metrics.insights.length > 0 ? '<div class="insights"><h3>💡 Key Insights</h3><ul>' + metrics.insights.slice(0, 3).map(insight => '<li>' + this.escapeHtml(insight) + '</li>').join('') + '</ul></div>' : '',
       '</section>',
     ].join('');
   }
@@ -161,6 +246,17 @@ export class DigestBuilder {
       '.header h1{margin:0;font-size:28px;color:#111827;}',
       '.header p{color:#6b7280;margin-top:8px;}',
       '.stats{background:#f8fafc;padding:16px;border-radius:10px;margin-bottom:24px;color:#1f2937;}',
+    '.metrics{background:#f0f9ff;padding:20px;border-radius:10px;margin-bottom:24px;border-left:4px solid #0ea5e9;}',
+    '.metrics h2{margin:0 0 16px 0;color:#0f172a;font-size:20px;}',
+    '.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:16px;margin-bottom:16px;}',
+    '.metric{text-align:center;background:#fff;padding:12px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}',
+    '.metric-value{font-size:24px;font-weight:700;color:#0ea5e9;margin-bottom:4px;}',
+    '.metric-label{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;}',
+    '.top-platform{margin:12px 0 0 0;color:#1f2937;font-size:14px;}',
+    '.insights{margin-top:16px;}',
+    '.insights h3{margin:0 0 8px 0;color:#1f2937;font-size:16px;}',
+    '.insights ul{margin:0;padding-left:20px;color:#374151;}',
+    '.insights li{margin-bottom:4px;font-size:14px;}',
       '.post{border:1px solid #e2e8f0;border-radius:10px;margin-bottom:20px;overflow:hidden;}',
       '.post-header{display:flex;justify-content:space-between;align-items:center;background:#f1f5f9;padding:16px;}',
       '.platform{font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:0.08em;color:#2563eb;}',

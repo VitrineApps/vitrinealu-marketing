@@ -1,73 +1,155 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { z } from 'zod';
 import { env as config } from '../config.js';
 import { getLLM } from './llm.js';
+import { logger } from '@vitrinealu/shared';
+import {
+  captionSchema,
+  type CaptionContext,
+  type Platform,
+  platformConfig,
+  getOptimalHashtagCount,
+  getPlatformTone,
+} from './platformConfig.js';
+import { z } from 'zod';
 
-const Schema = z.object({
-  channel: z.enum(["instagram", "tiktok", "linkedin", "youtube", "facebook"]),
-  context: z.object({
-    product: z.string().optional(),
-    locale: z.string().optional(),
-    season: z.string().optional(),
-    benefits: z.array(z.string()).default([]),
-    tone: z.string().optional(),
-    variantType: z.string().optional()
-  })
+const captionResultSchema = z.object({
+  text: z.string(),
+  hashtags: z.array(z.string()),
+  cta: z.string().optional()
 });
 
-type CaptionInput = z.infer<typeof Schema>;
-export type CaptionContext = CaptionInput['context'];
+export type { CaptionContext, Platform };
+
+export interface CaptionResult {
+  text: string;
+  hashtags: string[];
+  cta?: string;
+}
 
 export async function generateCaption(
-  channel: CaptionInput['channel'], 
-  context: CaptionInput['context']
-): Promise<{ caption: string; hashtags: string[] }> {
-  // Validate input
-  const validated = Schema.parse({ channel, context });
+  platform: Platform,
+  context: CaptionContext = {}
+): Promise<CaptionResult> {
+  // Validate and normalize input
+  const request = captionSchema.parse({ platform, context });
   
-  const systemPrompt = await loadSystemPrompt(validated.channel);
-  const userPrompt = buildUserPrompt(validated.context);
+  // Load platform-specific system prompt
+  const systemPrompt = await loadSystemPrompt(platform);
+  const userPrompt = buildUserPrompt(request.context, platform);
 
+  // Generate content using LLM
   const llm = getLLM();
   const content = await llm.chat({
     system: systemPrompt,
     user: userPrompt,
-    model: config.CAPTION_MODEL
+    model: config.CAPTION_MODEL,
   });
 
   if (!content) {
-    throw new Error('No content generated');
+    throw new Error(`No content generated for ${platform}`);
   }
 
-  // Parse caption and hashtags
-  const lines = content.split('\n');
-  const caption = lines.filter(line => !line.startsWith('#')).join('\n').trim();
-  const allHashtags = lines.filter(line => line.startsWith('#')).map(line => line.trim());
-  const hashtags = pickTopN(allHashtags, config.CAPTION_MAX_HASHTAGS);
-
-  return { caption, hashtags };
-}
-
-async function loadSystemPrompt(channel: string): Promise<string> {
-  const fileName = `system.${channel === 'youtube' ? 'youtube' : channel === 'tiktok' ? 'tiktok' : channel === 'linkedin' ? 'linkedin' : 'ig'}.txt`;
-  const filePath = join(process.cwd(), 'prompts', fileName);
-  return readFile(filePath, 'utf-8');
-}
-
-function buildUserPrompt(context: CaptionInput['context']): string {
-  const parts: string[] = [];
+  // Parse caption and hashtags with platform-aware logic
+  const { text, hashtags } = parseContent(content, platform);
   
-  if (context.product) parts.push(`Product: ${context.product}`);
+  const result: CaptionResult = {
+    text,
+    hashtags,
+    cta: context.callToAction
+  };
+
+  captionResultSchema.parse(result);
+
+  logger.info({
+    text,
+    hashtags: hashtags.length,
+    platform,
+  }, 'Caption generated successfully');
+
+  return result;
+}
+
+// Legacy function for backward compatibility
+export async function generateCaptionLegacy(
+  channel: Platform,
+  context: CaptionContext
+): Promise<{ caption: string; hashtags: string[] }> {
+  const result = await generateCaption(channel, context);
+  return {
+    caption: result.text,
+    hashtags: result.hashtags,
+  };
+}
+
+async function loadSystemPrompt(platform: Platform): Promise<string> {
+  const filePath = join(process.cwd(), 'services', 'worker', 'prompts', `${platform}.md`);
+  
+  try {
+    return await readFile(filePath, 'utf-8');
+  } catch (error) {
+    throw new Error(`Failed to load system prompt for ${platform}: ${(error as Error).message}`);
+  }
+}
+
+function buildUserPrompt(context: CaptionContext, platform: Platform): string {
+  const parts: string[] = [];
+  const platformConf = platformConfig[platform];
+  
+  // Add context information
+  if (context.product) parts.push(`Product/Service: ${context.product}`);
   if (context.locale) parts.push(`Locale: ${context.locale}`);
-  if (context.season) parts.push(`Season: ${context.season}`);
-  if (context.benefits.length > 0) parts.push(`Benefits: ${context.benefits.join(', ')}`);
-  if (context.tone) parts.push(`Tone: ${context.tone}`);
-  if (context.variantType) parts.push(`Variant Type: ${context.variantType}`);
+  if (context.season) parts.push(`Season/Timing: ${context.season}`);
+  if (context.benefits && context.benefits.length > 0) {
+    parts.push(`Key Benefits: ${context.benefits.join(', ')}`);
+  }
+  if (context.brandValues && context.brandValues.length > 0) {
+    parts.push(`Brand Values: ${context.brandValues.join(', ')}`);
+  }
+  if (context.targetAudience) parts.push(`Target Audience: ${context.targetAudience}`);
+  if (context.variantType) parts.push(`Content Type: ${context.variantType}`);
+  
+  // Add tone guidance
+  const tone = getPlatformTone(platform, context.tone);
+  parts.push(`Desired Tone: ${tone}`);
+  
+  // Add platform-specific constraints
+  parts.push(`Platform: ${platform}`);
+  parts.push(`Max Caption Length: ${platformConf.maxCaptionLength} characters`);
+  parts.push(`Optimal Hashtag Count: ${getOptimalHashtagCount(platform)}`);
+  
+  // Add custom call-to-action if provided
+  if (context.callToAction) {
+    parts.push(`Call-to-Action: ${context.callToAction}`);
+  }
   
   return parts.join('\n');
 }
 
-function pickTopN(hashtags: string[], n: number): string[] {
-  return hashtags.slice(0, n);
+function parseContent(content: string, platform: Platform): { text: string; hashtags: string[] } {
+  const lines = content.split('\n').map(line => line.trim()).filter(Boolean);
+  
+  // Separate hashtags from caption content
+  const hashtagLines: string[] = [];
+  const captionLines: string[] = [];
+  
+  for (const line of lines) {
+    if (line.startsWith('#')) {
+      // Extract individual hashtags from the line
+      const tags = line.split(/\s+/).filter(tag => tag.startsWith('#'));
+      hashtagLines.push(...tags);
+    } else {
+      captionLines.push(line);
+    }
+  }
+  
+  const caption = captionLines.join('\n').trim();
+  const rawHashtags = hashtagLines.map(tag => tag.replace('#', '').trim());
+  
+  // Limit hashtags to platform optimal count
+  const optimalCount = getOptimalHashtagCount(platform);
+  const hashtags = rawHashtags.slice(0, optimalCount);
+  
+  return { text: caption, hashtags };
 }
+

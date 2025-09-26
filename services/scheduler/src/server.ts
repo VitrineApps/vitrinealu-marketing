@@ -9,6 +9,7 @@ import { Repository, Post } from './repository.js';
 import { WeeklyPlanner } from './weeklyPlanner.js';
 import { PlanningService } from './plan.js';
 import { DigestGenerator } from './email/digest.js';
+import { MetricsHarvester } from './metrics/harvester.js';
 import { mailer } from './mailer.js';
 import { config } from './config.js';
 import { logger } from './logger.js';
@@ -26,6 +27,10 @@ const SendDigestRequestSchema = z.object({
   startDate: z.string().datetime(),
   endDate: z.string().datetime(),
   subject: z.string().optional(),
+});
+
+const MetricsRequestSchema = z.object({
+  days: z.number().min(1).max(365).optional().default(30),
 });
 
 const DraftRequestSchema = z.object({
@@ -55,6 +60,7 @@ export class SchedulerServer {
   private repository: Repository;
   private weeklyPlanner: WeeklyPlanner;
   private digestGenerator: DigestGenerator;
+  private metricsHarvester: MetricsHarvester;
   private bufferClient: BufferClient;
 
   constructor() {
@@ -62,6 +68,7 @@ export class SchedulerServer {
     const planningService = new PlanningService();
     this.weeklyPlanner = new WeeklyPlanner(planningService, this.repository);
     this.digestGenerator = new DigestGenerator();
+    this.metricsHarvester = new MetricsHarvester();
     this.bufferClient = new BufferClient();
     this.app = express();
 
@@ -89,6 +96,43 @@ export class SchedulerServer {
   private setupRoutes(): void {
     this.app.get('/health', (_req, res) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+
+    // Metrics endpoints
+    this.app.post('/api/metrics/harvest', async (req, res) => {
+      try {
+        const report = await this.metricsHarvester.harvestWeeklyMetrics();
+        res.json(report);
+      } catch (error) {
+        logger.error('Error harvesting metrics:', error);
+        res.status(500).json({ error: 'Failed to harvest metrics' });
+      }
+    });
+
+    this.app.get('/api/metrics/historical', (req, res) => {
+      try {
+        const { days } = MetricsRequestSchema.parse(req.query);
+        const metrics = this.metricsHarvester.getHistoricalMetrics(days);
+        res.json({ metrics, count: metrics.length });
+      } catch (error) {
+        logger.error('Error getting historical metrics:', error);
+        res.status(400).json({ error: 'Invalid request or internal error' });
+      }
+    });
+
+    this.app.post('/api/metrics/post/:postId', async (req, res) => {
+      try {
+        const { postId } = req.params;
+        const metrics = await this.metricsHarvester.harvestPostMetrics(postId);
+        if (!metrics) {
+          res.status(404).json({ error: 'Post not found or no metrics available' });
+          return;
+        }
+        res.json(metrics);
+      } catch (error) {
+        logger.error('Error harvesting post metrics:', error);
+        res.status(500).json({ error: 'Failed to harvest post metrics' });
+      }
     });
 
     this.app.post('/api/weekly-plan', async (req, res) => {
@@ -300,6 +344,7 @@ export class SchedulerServer {
 
   public close(): void {
     this.repository.close();
+    this.metricsHarvester.close();
   }
 }
 
