@@ -104,6 +104,7 @@ export const enhanceJob = async (data: EnhanceJobData): Promise<EnhanceResult> =
     return {
       kind: 'enhance',
       url,
+      fileId: upload.id,
       metadata: {
         provider: selectedProvider.name,
         scale: providerResult.scale,

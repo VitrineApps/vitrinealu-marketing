@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodSchema } from 'zod';
+import { enqueueAndWait } from '../../lib/queue.js';
 import {
   MediaJobResult,
   hashJobSchema,
@@ -88,7 +89,7 @@ export const registerMediaRoutes = async (app: FastifyInstance) => {
     const body = parseOrReply(captionJobSchema, request.body, reply);
     if (!body) return;
     const result = ensureKind(await enqueueAndWait({ ...body, kind: 'caption' }), 'caption');
-    return reply.status(200).send({ caption: result.caption, hashtags: result.hashtags });
+    return reply.status(200).send({ caption: result.text, hashtags: result.hashtags });
   });
 
   // Buffer integration is now owned by Scheduler. This route is retired per Plan V2.

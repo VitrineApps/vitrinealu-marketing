@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
-import { backgroundReplaceJobSchema, MediaJobData, BackgroundReplaceJobData } from '../../jobs/types.js';
+import { backgroundReplaceJobSchema, MediaJobData } from '../../jobs/types.js';
 import { z } from 'zod';
 import { mediaQueue } from '../../lib/queue.js';
 
@@ -24,6 +24,11 @@ export const registerBackgroundRoutes = async (app: FastifyInstance) => {
         kind: 'backgroundReplace' as const,
         ...(body as Record<string, unknown>)
       } as MediaJobData;
+
+      // Check if queue is available
+      if (!mediaQueue) {
+        return reply.status(503).send({ error: 'Job queue is not available' });
+      }
 
       // Enqueue job
       const job = await mediaQueue.add('backgroundReplace', jobData, {

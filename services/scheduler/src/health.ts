@@ -30,6 +30,23 @@ export function createHealthRouter(): Router {
       checks.bufferApi = `error: ${(e as Error).message}`;
     }
 
+    // Enhance FastAPI check
+    try {
+      const enhanceUrl = process.env.ENHANCE_SERVICE_URL || 'http://localhost:8000';
+      const response = await fetch(`${enhanceUrl}/health`, {
+        signal: AbortSignal.timeout(5000)
+      });
+      if (response.ok) {
+        checks.enhanceApi = 'ok';
+      } else {
+        healthy = false;
+        checks.enhanceApi = `error: HTTP ${response.status}`;
+      }
+    } catch (e) {
+      healthy = false;
+      checks.enhanceApi = `error: ${(e as Error).message}`;
+    }
+
     // Redis check (if used)
     // checks.redis = 'ok'; // Add if Redis is part of infra
 

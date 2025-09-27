@@ -8,6 +8,7 @@ import type { BackgroundCleanupJobData, BackgroundReplaceJobData } from './types
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { decode } from 'jpeg-js';
 
 interface EnhanceServiceResponse {
   assetId: string;

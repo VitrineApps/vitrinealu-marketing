@@ -1,0 +1,5 @@
+ingest:
+  local_source: "/host/input"
+  glob: "**/*.{jpg,jpeg,png,webp}"
+  min_bytes: 50000
+  ignore_hidden: true

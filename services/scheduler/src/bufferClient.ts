@@ -213,6 +213,49 @@ export class BufferClient {
     return createCarouselDraft(input);
   }
 
+  async createDraft(profileIds: string[], text: string, mediaUrls: string[], scheduledAt?: Date): Promise<string> {
+    // For single image/video posts
+    const payload = {
+      profile_ids: profileIds,
+      text,
+      media: {
+        photo: mediaUrls[0], // For single media
+      },
+      ...(scheduledAt && { scheduled_at: Math.floor(scheduledAt.getTime() / 1000) }),
+    };
+
+    const baseUrl = process.env.BUFFER_BASE_URL || config.config.BUFFER_BASE_URL || 'https://api.buffer.com/2/';
+    const accessToken = process.env.BUFFER_ACCESS_TOKEN || config.config.BUFFER_ACCESS_TOKEN;
+    const url = `${baseUrl.replace(/\/$/, '')}/updates/create.json`;
+
+    return pRetry(async () => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Buffer API error: ${response.status} ${body}`);
+      }
+
+      const data = await response.json() as BufferResponse;
+      return data.update.id;
+    }, {
+      retries: 3,
+      minTimeout: 1000,
+      maxTimeout: 5000,
+    });
+  }
+
+  async publish(updateId: string): Promise<void> {
+    await this.postUpdateAction(updateId, 'share');
+  }
+
   async scheduleDraft(updateId: string): Promise<void> {
     await this.postUpdateAction(updateId, 'share');
   }

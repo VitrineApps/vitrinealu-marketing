@@ -35,7 +35,8 @@ const workerEnvSchema = z.object({
   APPROVAL_SECRET: z.string().optional(),
   WEBHOOK_SECRET: z.string().min(32, 'WEBHOOK_SECRET must be at least 32 characters').optional(),
   ENHANCE_SERVICE_URL: z.string().default('http://localhost:8000'),
-  RUNWAY_API_KEY: z.string().optional()
+  RUNWAY_API_KEY: z.string().optional(),
+  LOCAL_INPUT_DIR: z.string().default('/host/input')
 });
 
 const parsed = workerEnvSchema.parse(process.env);

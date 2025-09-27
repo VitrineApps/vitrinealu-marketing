@@ -79,7 +79,7 @@ export type MediaJobData =
 export type MediaJobResult =
   | { kind: 'hash'; hash: string }
   | { kind: 'score'; score: number; isCandidate: boolean }
-  | { kind: 'enhance'; url: string; metadata: { provider: string; scale: number; ms: number } }
+  | { kind: 'enhance'; url: string; fileId: string; metadata: { provider: string; scale: number; ms: number } }
   | { kind: 'privacyBlur'; url: string }
   | { kind: 'backgroundCleanup'; url: string }
   | { kind: 'backgroundReplace'; jobId: string }

@@ -1,0 +1,172 @@
+{
+  "name": "Main Local Ingest Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://worker:3000/ingest/local/scan",
+        "sendBody": false,
+        "sendHeaders": false
+      },
+      "id": "http-scan",
+      "name": "HTTP Request - Scan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "greaterThan",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-files",
+      "name": "IF - Files Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://worker:3000/ingest/local/enqueue",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "paths",
+              "value": "={{ $json.slice(0, 5).map(item => item.path) }}"
+            }
+          ]
+        }
+      },
+      "id": "http-enqueue",
+      "name": "HTTP Request - Enqueue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://worker:3000/healthz",
+        "sendBody": false
+      },
+      "id": "wait-completion",
+      "name": "Wait for Completion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://scheduler:8080/api/drafts/create",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "mediaUrls",
+              "value": "={{ $json.map(item => item.enhanceUrl) }}"
+            },
+            {
+              "name": "caption",
+              "value": "Auto-generated caption"
+            },
+            {
+              "name": "platform",
+              "value": "instagram"
+            }
+          ]
+        }
+      },
+      "id": "create-drafts",
+      "name": "Create Buffer Drafts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1340, 200]
+    }
+  ],
+  "connections": {
+    "cron-trigger": {
+      "main": [
+        [
+          {
+            "node": "http-scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "http-scan": {
+      "main": [
+        [
+          {
+            "node": "if-files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if-files": {
+      "main": [
+        [
+          {
+            "node": "http-enqueue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "http-enqueue": {
+      "main": [
+        [
+          {
+            "node": "wait-completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wait-completion": {
+      "main": [
+        [
+          {
+            "node": "create-drafts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

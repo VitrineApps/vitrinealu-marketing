@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { logger } from '@vitrinealu/shared/logger';
 
 // Schema definitions
 const MetricsCollectionRequest = z.object({
@@ -233,7 +234,7 @@ export const registerMetricsRoutes = async (app: FastifyInstance) => {
 
       return reply.send({ posts });
     } catch (error) {
-      app.log.error('Failed to get published posts:', error);
+      logger.error({ err: error }, 'Failed to get published posts');
       return reply.status(500).send({ error: 'Failed to get published posts' });
     }
   });
@@ -266,12 +267,12 @@ export const registerMetricsRoutes = async (app: FastifyInstance) => {
         metrics.push(metric);
         
         // In a real implementation, save to database here
-        app.log.info('Metrics collected for post:', { postId: post.id, platform: post.platform });
+        logger.info({ postId: post.id, platform: post.platform }, 'Metrics collected for post');
       }
 
       return reply.send({ metrics, collected: metrics.length });
     } catch (error) {
-      app.log.error('Failed to collect metrics:', error);
+      logger.error({ err: error }, 'Failed to collect metrics');
       return reply.status(500).send({ error: 'Failed to collect metrics' });
     }
   });
@@ -311,7 +312,7 @@ export const registerMetricsRoutes = async (app: FastifyInstance) => {
 
       return reply.send({ analysis });
     } catch (error) {
-      app.log.error('Failed to analyze metrics:', error);
+      logger.error({ err: error }, 'Failed to analyze metrics');
       return reply.status(500).send({ error: 'Failed to analyze metrics' });
     }
   });
@@ -331,7 +332,7 @@ export const registerMetricsRoutes = async (app: FastifyInstance) => {
         summary: analysis.summary
       });
     } catch (error) {
-      app.log.error('Failed to generate report:', error);
+      logger.error({ err: error }, 'Failed to generate report');
       return reply.status(500).send({ error: 'Failed to generate report' });
     }
   });
@@ -342,11 +343,11 @@ export const registerMetricsRoutes = async (app: FastifyInstance) => {
       const logData = request.body as any;
       
       // In a real implementation, this would save to database
-      app.log.info('Metrics report activity logged:', logData);
+      logger.info({ logData }, 'Metrics report activity logged');
       
       return reply.send({ logged: true });
     } catch (error) {
-      app.log.error('Failed to log report activity:', error);
+      logger.error({ err: error }, 'Failed to log report activity');
       return reply.status(500).send({ error: 'Failed to log report activity' });
     }
   });

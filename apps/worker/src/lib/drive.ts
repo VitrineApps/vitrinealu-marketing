@@ -121,5 +121,9 @@ export const driveHelpers = {
     const yearMonth = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
     const readyRoot = env.GOOGLE_READY_PARENT_ID || (await driveHelpers.ensureFolder({ folderName: 'ready' }));
     return driveHelpers.ensureFolder({ parentId: readyRoot, folderName: yearMonth });
+  },
+
+  async ensureSourcePath(): Promise<string> {
+    return driveHelpers.ensureFolder({ folderName: 'source' });
   }
 };

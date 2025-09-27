@@ -201,7 +201,7 @@ const videoLinkedinJob = async (data: LinkedinJobData): Promise<LinkedinResult> 
 const captionJobProcessor = async (data: CaptionJobData): Promise<CaptionResult> => {
   const parsed = captionJobSchema.parse(data);
   const result = await captionJobImpl(parsed);
-  await logResult('caption', { channel: parsed.channel, caption: result.caption, hashtags: result.hashtags });
+  await logResult('caption', { channel: parsed.channel, caption: result.text, hashtags: result.hashtags });
   return { kind: 'caption', ...result };
 };
 

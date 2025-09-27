@@ -47,6 +47,10 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 # Drop sample photos here to trigger automation:
 cp your-photos/* assets/source/incoming/
 
+# For local Windows ingestion (production mode):
+# Drop photos in E:\my_projects\vitrinealu-marketing\input
+# The system will automatically scan and process via n8n cron
+
 # Or validate everything works:
 pnpm validate
 ```
@@ -71,6 +75,30 @@ pnpm validate
     ├── Weekly digest reviews
     ├── Social post approvals
     └── Analytics dashboard
+```
+
+## 📁 Local Input Ingestion
+
+For production deployment on Windows hosts, the system supports automatic ingestion from a local directory:
+
+### Configuration
+- **Host Path:** `E:\my_projects\vitrinealu-marketing\input`
+- **Container Path:** `/host/input` (mounted read-only)
+- **Environment:** `LOCAL_INPUT_DIR=/host/input`
+- **Config:** `config/ingest.yaml` defines glob patterns and filters
+
+### Automatic Processing
+- n8n cron job scans `/host/input` every 30 minutes
+- Processes new files matching `**/*.{jpg,jpeg,png,webp}`
+- Filters out files < 50KB and hidden files
+- Deduplicates based on path and modification time
+- Triggers full enhance → video → caption → Buffer draft pipeline
+
+### Docker Volume Mount
+All runtime services (n8n, worker, enhance, video, scheduler) have the volume mounted:
+```yaml
+volumes:
+  - "E:/my_projects/vitrinealu-marketing/input:/host/input:ro"
 ```
 
 ## 📊 Workflow Details

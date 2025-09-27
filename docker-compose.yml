@@ -31,6 +31,7 @@ services:
       - ./assets:/workspace/assets
       - ./config:/config
       - ./secrets:/secrets
+      - "E:/my_projects/vitrinealu-marketing/input:/host/input:ro"
 
   enhance:
     build: ./services/enhance
@@ -39,6 +40,7 @@ services:
       - ./assets:/workspace/assets
       - ./config:/config
       - ./secrets:/secrets
+      - "E:/my_projects/vitrinealu-marketing/input:/host/input:ro"
     depends_on: [cache]
 
   video:
@@ -47,6 +49,7 @@ services:
     volumes:
       - ./assets:/workspace/assets
       - ./config:/config
+      - "E:/my_projects/vitrinealu-marketing/input:/host/input:ro"
     depends_on: [cache]
 
   scheduler:
@@ -56,7 +59,29 @@ services:
     volumes:
       - ./assets:/workspace/assets
       - ./config:/config
+      - "E:/my_projects/vitrinealu-marketing/input:/host/input:ro"
     depends_on: [db,cache]
+
+  worker:
+    build: ./apps/worker
+    env_file: [.env]
+    ports: ["3000:3000"]
+    volumes:
+      - ./assets:/workspace/assets
+      - ./config:/config
+      - ./secrets:/secrets
+      - "E:/my_projects/vitrinealu-marketing/input:/host/input:ro"
+    depends_on: [db,cache]
+
+  background-service:
+    build: ./services/background-service
+    env_file: [.env]
+    volumes:
+      - ./assets:/workspace/assets
+      - ./config:/config
+      - ./secrets:/secrets
+      - "E:/my_projects/vitrinealu-marketing/input:/host/input:ro"
+    depends_on: [cache]
 
 volumes:
   dbdata:

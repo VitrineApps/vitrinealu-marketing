@@ -1,25 +1,28 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { logger } from '@vitrinealu/shared/logger';
 
 // Schema definitions
+const PostSchema = z.object({
+  id: z.string(),
+  assetId: z.string(),
+  platform: z.string(),
+  caption: z.string(),
+  hashtags: z.array(z.string()),
+  mediaPath: z.string(),
+  thumbnailPath: z.string().optional(),
+  scheduleSlot: z.string(),
+  createdAt: z.string(),
+  status: z.string()
+});
+
 const PendingPostsResponse = z.object({
-  posts: z.array(z.object({
-    id: z.string(),
-    assetId: z.string(),
-    platform: z.string(),
-    caption: z.string(),
-    hashtags: z.array(z.string()),
-    mediaPath: z.string(),
-    thumbnailPath: z.string().optional(),
-    scheduleSlot: z.string(),
-    createdAt: z.string(),
-    status: z.string()
-  }))
+  posts: z.array(PostSchema)
 });
 
 const GenerateDigestRequest = z.object({
-  posts: z.array(z.any()),
+  posts: z.array(PostSchema),
   weekStart: z.string()
 });
 
@@ -31,6 +34,21 @@ const DigestLogRequest = z.object({
   message: z.string().optional()
 });
 
+const SuccessNotificationRequest = z.object({
+  assetId: z.string(),
+  fileName: z.string(),
+  postsCreated: z.number(),
+  timestamp: z.string()
+});
+
+const QualityFailNotificationRequest = z.object({
+  assetId: z.string(),
+  fileName: z.string(),
+  score: z.number(),
+  threshold: z.number(),
+  timestamp: z.string()
+});
+
 // HMAC signing function
 function signApprovalLink(postId: string, action: 'approve' | 'reject', secret: string): string {
   const payload = { postId, action, timestamp: Date.now() };
@@ -39,8 +57,10 @@ function signApprovalLink(postId: string, action: 'approve' | 'reject', secret: 
   return `${Buffer.from(payloadStr).toString('base64')}.${signature}`;
 }
 
+type Post = z.infer<typeof PostSchema>;
+
 // Generate HTML digest template
-function generateDigestHTML(posts: any[], baseUrl: string, secret: string): string {
+function generateDigestHTML(posts: Post[], baseUrl: string, secret: string): string {
   const approveAllLink = `${baseUrl}/api/approve-all?token=${signApprovalLink('all', 'approve', secret)}`;
   
   const postsHTML = posts.map(post => {
@@ -131,7 +151,7 @@ export const registerDigestRoutes = async (app: FastifyInstance) => {
 
       return reply.send({ posts });
     } catch (error) {
-      app.log.error('Failed to get pending posts:', error);
+      logger.error({ err: error }, 'Failed to get pending posts');
       return reply.status(500).send({ error: 'Failed to get pending posts' });
     }
   });
@@ -154,7 +174,7 @@ export const registerDigestRoutes = async (app: FastifyInstance) => {
         weekStart 
       });
     } catch (error) {
-      app.log.error('Failed to generate digest:', error);
+      logger.error({ err: error }, 'Failed to generate digest');
       return reply.status(500).send({ error: 'Failed to generate digest' });
     }
   });
@@ -165,11 +185,11 @@ export const registerDigestRoutes = async (app: FastifyInstance) => {
       const logData = DigestLogRequest.parse(request.body);
       
       // In a real implementation, this would save to database
-      app.log.info('Digest activity logged:', logData);
+      logger.info({ logData }, 'Digest activity logged');
       
       return reply.send({ logged: true });
     } catch (error) {
-      app.log.error('Failed to log digest activity:', error);
+      logger.error({ err: error }, 'Failed to log digest activity');
       return reply.status(500).send({ error: 'Failed to log digest activity' });
     }
   });
@@ -205,7 +225,7 @@ export const registerDigestRoutes = async (app: FastifyInstance) => {
       const { postId, action } = payload;
       
       // In a real implementation, this would update the database
-      app.log.info(`Post ${postId} ${action}d`);
+      logger.info({ postId, action }, 'Post approval processed');
       
       return reply.type('text/html').send(`
         <html>
@@ -217,7 +237,7 @@ export const registerDigestRoutes = async (app: FastifyInstance) => {
         </html>
       `);
     } catch (error) {
-      app.log.error('Failed to process approval:', error);
+      logger.error({ err: error }, 'Failed to process approval');
       return reply.status(500).send({ error: 'Failed to process approval' });
     }
   });
@@ -249,7 +269,7 @@ export const registerDigestRoutes = async (app: FastifyInstance) => {
       }
 
       // In a real implementation, this would approve all pending posts
-      app.log.info('All pending posts approved');
+      logger.info('All pending posts approved');
       
       return reply.type('text/html').send(`
         <html>
@@ -261,7 +281,7 @@ export const registerDigestRoutes = async (app: FastifyInstance) => {
         </html>
       `);
     } catch (error) {
-      app.log.error('Failed to approve all posts:', error);
+      logger.error({ err: error }, 'Failed to approve all posts');
       return reply.status(500).send({ error: 'Failed to approve all posts' });
     }
   });
@@ -269,37 +289,37 @@ export const registerDigestRoutes = async (app: FastifyInstance) => {
   // Notification endpoints for workflow status
   app.post('/notify/success', async (request, reply) => {
     try {
-      const { assetId, fileName, postsCreated, timestamp } = request.body as any;
+      const { assetId, fileName, postsCreated, timestamp } = SuccessNotificationRequest.parse(request.body);
       
-      app.log.info('Asset processing completed successfully:', {
+      logger.info({
         assetId,
         fileName,
         postsCreated,
         timestamp
-      });
+      }, 'Asset processing completed successfully');
       
       return reply.send({ notified: true });
     } catch (error) {
-      app.log.error('Failed to log success notification:', error);
+      logger.error({ err: error }, 'Failed to log success notification');
       return reply.status(500).send({ error: 'Failed to log notification' });
     }
   });
 
   app.post('/notify/quality-fail', async (request, reply) => {
     try {
-      const { assetId, fileName, score, threshold, timestamp } = request.body as any;
+      const { assetId, fileName, score, threshold, timestamp } = QualityFailNotificationRequest.parse(request.body);
       
-      app.log.warn('Asset failed quality threshold:', {
+      logger.warn({
         assetId,
         fileName,
         score,
         threshold,
         timestamp
-      });
+      }, 'Asset failed quality threshold');
       
       return reply.send({ notified: true });
     } catch (error) {
-      app.log.error('Failed to log quality failure notification:', error);
+      logger.error({ err: error }, 'Failed to log quality failure notification');
       return reply.status(500).send({ error: 'Failed to log notification' });
     }
   });
